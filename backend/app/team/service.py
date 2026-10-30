@@ -258,12 +258,59 @@ def _owner_board(db: Session, actor: User) -> TeamBoardData:
     )
 
 
+def _salesperson_ids(db: Session, company_id: uuid.UUID) -> set[uuid.UUID]:
+    return {user.id for user in _users_with_role(db, RoleName.SALESPERSON, company_id)}
+
+
+def _salesperson_member_ids(db: Session, project_id: uuid.UUID, company_id: uuid.UUID) -> set[uuid.UUID]:
+    member_ids = set(
+        db.scalars(select(ProjectMember.user_id).where(ProjectMember.project_id == project_id)).all()
+    )
+    return member_ids & _salesperson_ids(db, company_id)
+
+
+def _transfer_project_leads(
+    db: Session,
+    *,
+    project_id: uuid.UUID,
+    company_id: uuid.UUID,
+    from_owner_ids: set[uuid.UUID],
+    to_owner_id: uuid.UUID,
+) -> int:
+    """Reassign project leads from the given owners to to_owner_id. Returns count moved."""
+    owners = from_owner_ids - {to_owner_id}
+    if not owners:
+        return 0
+    leads = list(
+        db.scalars(
+            select(Lead).where(
+                Lead.project_id == project_id,
+                Lead.company_id == company_id,
+                Lead.owner_id.in_(owners),
+                Lead.is_deleted.is_(False),
+            )
+        ).all()
+    )
+    now = datetime.now(UTC)
+    for lead in leads:
+        lead.owner_id = to_owner_id
+        lead.updated_at = now
+    return len(leads)
+
+
 def set_assignment(
     db: Session,
     actor: User,
     payload: SetAssignmentRequest,
     ip_address: str | None,
-) -> TeamBoardData:
+) -> tuple[TeamBoardData, int]:
+    """Assign or remove a person on a project.
+
+    For business owners managing salespeople: leads follow the handoff.
+    - Assign Demo after Kunal was removed → Kunal's project leads move to Demo.
+    - Remove Kunal while Demo is the only remaining salesperson → same transfer.
+    Returns (board, leads_moved).
+    """
     project = db.get(Project, payload.project_id)
     if project is None or project.status != ACTIVE:
         raise _validation("project_id", "UNKNOWN_PROJECT", "Choose a project.")
@@ -279,6 +326,7 @@ def set_assignment(
     )
     assert target is not None
     roles = _role_names(target)
+    managing_sales = False
 
     if _is_platform(actor):
         if RoleName.BUSINESS_OWNER not in roles:
@@ -296,10 +344,12 @@ def set_assignment(
         owner_projects = project_ids_for_member(db, actor.id)
         if owner_projects and project.id not in owner_projects:
             raise _forbidden()
+        managing_sales = True
     else:
         raise _forbidden()
 
     existing = db.get(ProjectMember, (project.id, target.id))
+    leads_moved = 0
     if payload.assigned and existing is None:
         db.add(
             ProjectMember(
@@ -310,9 +360,32 @@ def set_assignment(
             )
         )
         action = "project_member_assigned"
+        if managing_sales:
+            db.flush()
+            remaining = _salesperson_member_ids(db, project.id, project.company_id)
+            orphaned = _salesperson_ids(db, project.company_id) - remaining
+            leads_moved = _transfer_project_leads(
+                db,
+                project_id=project.id,
+                company_id=project.company_id,
+                from_owner_ids=orphaned,
+                to_owner_id=target.id,
+            )
     elif not payload.assigned and existing is not None:
         db.delete(existing)
         action = "project_member_removed"
+        if managing_sales:
+            db.flush()
+            remaining = _salesperson_member_ids(db, project.id, project.company_id)
+            if len(remaining) == 1:
+                sole = next(iter(remaining))
+                leads_moved = _transfer_project_leads(
+                    db,
+                    project_id=project.id,
+                    company_id=project.company_id,
+                    from_owner_ids={target.id},
+                    to_owner_id=sole,
+                )
     else:
         action = "project_member_unchanged"
     if action != "project_member_unchanged":
@@ -322,13 +395,24 @@ def set_assignment(
             actor_id=actor.id,
             target_type="project",
             target_id=project.id,
-            context={"user_id": str(target.id), "assigned": payload.assigned},
+            context={
+                "user_id": str(target.id),
+                "assigned": payload.assigned,
+                "leads_moved": leads_moved,
+            },
             ip_address=ip_address,
         )
         db.commit()
-        log_event(logger, action, actor_id=str(actor.id), project_id=str(project.id), user_id=str(target.id))
+        log_event(
+            logger,
+            action,
+            actor_id=str(actor.id),
+            project_id=str(project.id),
+            user_id=str(target.id),
+            leads_moved=leads_moved,
+        )
     company_filter = project.company_id if _is_platform(actor) else None
-    return get_team_board(db, actor, company_filter)
+    return get_team_board(db, actor, company_filter), leads_moved
 
 
 def create_salesperson(

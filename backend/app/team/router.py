@@ -51,8 +51,12 @@ def patch_assignment(
     db: Session = Depends(get_db),
     actor: User = Depends(get_current_user),
 ) -> ApiResponse[TeamBoardData]:
-    board = set_assignment(db, actor, payload, client_ip(request))
-    return ApiResponse(data=board, message="Assignment updated.")
+    board, leads_moved = set_assignment(db, actor, payload, client_ip(request))
+    if leads_moved:
+        message = f"Assignment updated. Moved {leads_moved} lead(s) to the assigned salesperson."
+    else:
+        message = "Assignment updated."
+    return ApiResponse(data=board, message=message)
 
 
 @router.post(

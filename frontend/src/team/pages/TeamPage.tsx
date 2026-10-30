@@ -135,7 +135,13 @@ export function TeamPage() {
         assigned: next,
       })
       setBoard(result.data)
-      setNotice(next ? `Assigned ${person.full_name} to ${project.name}.` : `Removed ${person.full_name} from ${project.name}.`)
+      setNotice(
+        result.message?.trim()
+          ? result.message
+          : next
+            ? `Assigned ${person.full_name} to ${project.name}.`
+            : `Removed ${person.full_name} from ${project.name}.`,
+      )
     } catch (requestError) {
       setError(requestError instanceof ApiError ? requestError.message : 'Could not update assignment.')
     } finally {
@@ -213,7 +219,7 @@ export function TeamPage() {
         <Typography color="text.secondary">
           {isPlatform
             ? 'Assign each project to the business owners who should see it. Then those owners put salespeople on the project.'
-            : 'Assign salespeople to projects and move leads between them. Lead names are never shown here.'}
+            : 'Assign salespeople to projects. When you hand a project to someone else, their leads move with it. Lead names are never shown here.'}
         </Typography>
       </Stack>
 

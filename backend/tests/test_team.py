@@ -178,3 +178,141 @@ async def test_owner_assigns_salesperson_adds_rep_and_moves_leads(client):
         assert db.scalar(select(ProjectMember.user_id).where(ProjectMember.user_id == owner_id)) == owner_id
     finally:
         db.close()
+
+
+async def test_reassigning_project_moves_leads_to_new_salesperson(client):
+    """BO removes Kunal and assigns Demo → Demo owns the project leads."""
+    company_id = _add_company("Handoff Co")
+    _add_member("root@example.com", "SUPER_ADMIN")
+    _add_member("owner@example.com", "BUSINESS_OWNER", company_id)
+    kunal_id = _add_member("kunal@example.com", "SALESPERSON", company_id)
+    demo_id = _add_member("demo@example.com", "SALESPERSON", company_id)
+
+    assert (await login(client, email="root@example.com")).status_code == 200
+    created = await client.post(
+        "/api/v1/projects",
+        json={"name": "Hiring", "code": "HIRING", "company_id": str(company_id), "template": "HIRING"},
+        headers=await csrf_headers(client),
+    )
+    project_id = next(item["id"] for item in created.json()["data"]["items"] if item["code"] == "HIRING")
+
+    assert (await login(client, email="owner@example.com")).status_code == 200
+    assert (
+        await client.patch(
+            "/api/v1/team/assignments",
+            json={"project_id": project_id, "user_id": str(kunal_id), "assigned": True},
+            headers=await csrf_headers(client),
+        )
+    ).status_code == 200
+
+    assert (await login(client, email="kunal@example.com")).status_code == 200
+    lead = await client.post(
+        "/api/v1/leads",
+        json={
+            "full_name": "Handoff Lead",
+            "mobile": "9000000099",
+            "status": "new",
+            "priority": "high",
+            "next_followup_at": "2026-11-02T10:30:00Z",
+            "project_id": project_id,
+        },
+        headers=await csrf_headers(client),
+    )
+    assert lead.status_code == 201, lead.text
+    lead_id = lead.json()["data"]["id"]
+
+    assert (await login(client, email="owner@example.com")).status_code == 200
+    removed = await client.patch(
+        "/api/v1/team/assignments",
+        json={"project_id": project_id, "user_id": str(kunal_id), "assigned": False},
+        headers=await csrf_headers(client),
+    )
+    assert removed.status_code == 200
+
+    assigned = await client.patch(
+        "/api/v1/team/assignments",
+        json={"project_id": project_id, "user_id": str(demo_id), "assigned": True},
+        headers=await csrf_headers(client),
+    )
+    assert assigned.status_code == 200
+    assert "Moved 1 lead" in assigned.json()["message"]
+
+    db = SessionLocal()
+    try:
+        stored = db.get(Lead, uuid.UUID(lead_id))
+        assert stored is not None
+        assert stored.owner_id == demo_id
+        assert db.get(ProjectMember, (uuid.UUID(project_id), kunal_id)) is None
+        assert db.get(ProjectMember, (uuid.UUID(project_id), demo_id)) is not None
+    finally:
+        db.close()
+
+    assert (await login(client, email="demo@example.com")).status_code == 200
+    listed = await client.get("/api/v1/leads")
+    assert listed.status_code == 200
+    assert any(item["id"] == lead_id for item in listed.json()["data"]["items"])
+
+    assert (await login(client, email="kunal@example.com")).status_code == 200
+    listed_old = await client.get("/api/v1/leads")
+    assert listed_old.status_code == 200
+    assert not any(item["id"] == lead_id for item in listed_old.json()["data"]["items"])
+
+
+async def test_unassign_moves_leads_when_one_salesperson_remains(client):
+    """Assign Demo first, then remove Kunal → leads move to Demo."""
+    company_id = _add_company("Sole Handoff")
+    _add_member("root@example.com", "SUPER_ADMIN")
+    _add_member("owner@example.com", "BUSINESS_OWNER", company_id)
+    kunal_id = _add_member("kunal2@example.com", "SALESPERSON", company_id)
+    demo_id = _add_member("demo2@example.com", "SALESPERSON", company_id)
+
+    assert (await login(client, email="root@example.com")).status_code == 200
+    created = await client.post(
+        "/api/v1/projects",
+        json={"name": "Paneer", "code": "PANEER", "company_id": str(company_id), "template": "PANEERWALA"},
+        headers=await csrf_headers(client),
+    )
+    project_id = next(item["id"] for item in created.json()["data"]["items"] if item["code"] == "PANEER")
+
+    assert (await login(client, email="owner@example.com")).status_code == 200
+    for user_id in (kunal_id, demo_id):
+        assert (
+            await client.patch(
+                "/api/v1/team/assignments",
+                json={"project_id": project_id, "user_id": str(user_id), "assigned": True},
+                headers=await csrf_headers(client),
+            )
+        ).status_code == 200
+
+    assert (await login(client, email="kunal2@example.com")).status_code == 200
+    lead = await client.post(
+        "/api/v1/leads",
+        json={
+            "full_name": "Second Handoff",
+            "mobile": "9000000088",
+            "status": "new",
+            "priority": "medium",
+            "next_followup_at": "2026-11-02T10:30:00Z",
+            "project_id": project_id,
+        },
+        headers=await csrf_headers(client),
+    )
+    assert lead.status_code == 201, lead.text
+    lead_id = lead.json()["data"]["id"]
+
+    assert (await login(client, email="owner@example.com")).status_code == 200
+    removed = await client.patch(
+        "/api/v1/team/assignments",
+        json={"project_id": project_id, "user_id": str(kunal_id), "assigned": False},
+        headers=await csrf_headers(client),
+    )
+    assert removed.status_code == 200
+    assert "Moved 1 lead" in removed.json()["message"]
+
+    db = SessionLocal()
+    try:
+        stored = db.get(Lead, uuid.UUID(lead_id))
+        assert stored is not None
+        assert stored.owner_id == demo_id
+    finally:
+        db.close()
