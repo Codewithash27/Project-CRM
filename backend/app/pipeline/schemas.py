@@ -27,10 +27,9 @@ def _collapse(value: str) -> str:
 class CreatePipelineStageRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    company_id: uuid.UUID | None = None
+    project_id: uuid.UUID
     label: str = Field(min_length=2, max_length=40)
     color: str = Field(default="#64748b", min_length=7, max_length=7)
-    is_entry: bool = False
     is_won: bool = False
     is_lost: bool = False
 
@@ -56,7 +55,6 @@ class UpdatePipelineStageRequest(BaseModel):
 
     label: str | None = Field(default=None, min_length=2, max_length=40)
     color: str | None = Field(default=None, min_length=7, max_length=7)
-    is_entry: bool | None = None
     is_won: bool | None = None
     is_lost: bool | None = None
 
@@ -84,7 +82,7 @@ class UpdatePipelineStageRequest(BaseModel):
 class ReorderPipelineStagesRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    company_id: uuid.UUID | None = None
+    project_id: uuid.UUID
     stage_ids: list[uuid.UUID] = Field(min_length=1)
 
 
@@ -96,7 +94,7 @@ class DeletePipelineStageRequest(BaseModel):
 
 class PipelineStagePublic(BaseModel):
     id: str
-    company_id: str
+    project_id: str
     key: str
     label: str
     color: str
@@ -104,18 +102,21 @@ class PipelineStagePublic(BaseModel):
     is_entry: bool
     is_won: bool
     is_lost: bool
+    is_locked: bool
     lead_count: int = 0
 
 
 class PipelineStageListData(BaseModel):
     items: list[PipelineStagePublic]
-    company_id: str
+    project_id: str
 
 
 def to_stage_public(stage: PipelineStage, lead_count: int = 0) -> PipelineStagePublic:
+    from app.pipeline.models import ENTRY_KEY
+
     return PipelineStagePublic(
         id=str(stage.id),
-        company_id=str(stage.company_id),
+        project_id=str(stage.project_id),
         key=stage.key,
         label=stage.label,
         color=stage.color,
@@ -123,5 +124,6 @@ def to_stage_public(stage: PipelineStage, lead_count: int = 0) -> PipelineStageP
         is_entry=stage.is_entry,
         is_won=stage.is_won,
         is_lost=stage.is_lost,
+        is_locked=stage.key == ENTRY_KEY or stage.is_entry,
         lead_count=lead_count,
     )

@@ -1,4 +1,4 @@
-"""Pipeline stage persistence. Stages are scoped to one company."""
+"""Pipeline stage persistence. Stages are scoped to one project. New is locked."""
 
 import uuid
 from datetime import datetime
@@ -19,18 +19,20 @@ from sqlalchemy.types import Uuid
 
 from app.core.database import Base
 
+ENTRY_KEY = "new"
+
 
 class PipelineStage(Base):
     __tablename__ = "pipeline_stages"
     __table_args__ = (
-        UniqueConstraint("company_id", "key", name="uq_pipeline_stages_company_key"),
-        Index("ix_pipeline_stages_company_sort", "company_id", "sort_order"),
+        UniqueConstraint("project_id", "key", name="uq_pipeline_stages_project_key"),
+        Index("ix_pipeline_stages_project_sort", "project_id", "sort_order"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    company_id: Mapped[uuid.UUID] = mapped_column(
+    project_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
-        ForeignKey("companies.id", ondelete="CASCADE"),
+        ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
     )
     key: Mapped[str] = mapped_column(String(40), nullable=False)

@@ -1,4 +1,4 @@
-"""Manage company-scoped pipeline stages."""
+"""Manage project-scoped pipeline stages. The New entry stage is locked for every project."""
 
 from __future__ import annotations
 
@@ -14,8 +14,8 @@ from app.audit.service import record_audit
 from app.common.exceptions import AppError, ErrorCode
 from app.core.logging import log_event
 from app.leads.models import Lead
-from app.organization.models import Company
-from app.pipeline.models import PipelineStage
+from app.organization.models import ACTIVE, Project
+from app.pipeline.models import ENTRY_KEY, PipelineStage
 from app.pipeline.schemas import (
     CreatePipelineStageRequest,
     DeletePipelineStageRequest,
@@ -27,6 +27,7 @@ from app.pipeline.schemas import (
     to_stage_public,
 )
 from app.roles.service import RoleName
+from app.team.service import project_ids_for_member
 from app.users.models import User
 from app.users.service import is_platform_admin
 
@@ -53,6 +54,16 @@ _LEGACY_STATUS = {
     "Nurture": "nurture",
     "unqualified": "lost",
 }
+
+DEFAULT_STAGES: tuple[tuple[str, str, str, bool, bool, bool], ...] = (
+    ("new", "New", "#93c5fd", True, False, False),
+    ("contacted", "Contacted", "#60a5fa", False, False, False),
+    ("in_progress", "In Progress", "#f59e0b", False, False, False),
+    ("qualified", "Qualified", "#34d399", False, False, False),
+    ("won", "Won", "#10b981", False, True, False),
+    ("lost", "Lost", "#f87171", False, False, True),
+    ("nurture", "Nurture", "#a78bfa", False, False, False),
+)
 
 
 def _role_names(user: User) -> set[str]:
@@ -86,40 +97,34 @@ def _require_manager(user: User) -> None:
         raise _forbidden()
 
 
-def resolve_company_id(db: Session, actor: User, requested: uuid.UUID | None) -> uuid.UUID:
+def _is_locked(stage: PipelineStage) -> bool:
+    return stage.key == ENTRY_KEY or stage.is_entry
+
+
+def accessible_project(db: Session, actor: User, project_id: uuid.UUID) -> Project:
+    project = db.get(Project, project_id)
+    if project is None or project.status != ACTIVE:
+        raise _validation("project_id", "UNKNOWN_PROJECT", "Choose a project.")
     if is_platform_admin(actor):
-        company_id = actor.company_id if requested is None else requested
-        if company_id is None:
-            raise _validation("company_id", "REQUIRED", "Company is required.")
-        company = db.get(Company, company_id)
-        if company is None:
-            raise _validation("company_id", "UNKNOWN_COMPANY", "Company not found.")
-        return company_id
-    if actor.company_id is None:
-        raise _forbidden()
-    if requested is not None and requested != actor.company_id:
-        raise _forbidden()
-    return actor.company_id
+        return project
+    if actor.company_id is None or project.company_id != actor.company_id:
+        raise _validation("project_id", "UNKNOWN_PROJECT", "Choose a project.")
+    roles = _role_names(actor)
+    if RoleName.BUSINESS_OWNER in roles:
+        return project
+    member_ids = project_ids_for_member(db, actor.id)
+    if project.id not in member_ids:
+        raise _validation("project_id", "NOT_ASSIGNED", "You are not assigned to this project.")
+    return project
 
 
 def canonicalize_status(value: str) -> str:
     return _LEGACY_STATUS.get(value, value.strip().lower().replace(" ", "_")[:40])
 
 
-DEFAULT_STAGES: tuple[tuple[str, str, str, bool, bool, bool], ...] = (
-    ("new", "New", "#93c5fd", True, False, False),
-    ("contacted", "Contacted", "#60a5fa", False, False, False),
-    ("in_progress", "In Progress", "#f59e0b", False, False, False),
-    ("qualified", "Qualified", "#34d399", False, False, False),
-    ("won", "Won", "#10b981", False, True, False),
-    ("lost", "Lost", "#f87171", False, False, True),
-    ("nurture", "Nurture", "#a78bfa", False, False, False),
-)
-
-
-def ensure_default_stages(db: Session, company_id: uuid.UUID) -> None:
+def ensure_default_stages(db: Session, project_id: uuid.UUID) -> None:
     exists = db.scalar(
-        select(PipelineStage.id).where(PipelineStage.company_id == company_id).limit(1)
+        select(PipelineStage.id).where(PipelineStage.project_id == project_id).limit(1)
     )
     if exists is not None:
         return
@@ -127,7 +132,7 @@ def ensure_default_stages(db: Session, company_id: uuid.UUID) -> None:
     for index, (key, label, color, is_entry, is_won, is_lost) in enumerate(DEFAULT_STAGES, start=1):
         db.add(
             PipelineStage(
-                company_id=company_id,
+                project_id=project_id,
                 key=key,
                 label=label,
                 color=color,
@@ -142,31 +147,23 @@ def ensure_default_stages(db: Session, company_id: uuid.UUID) -> None:
     db.flush()
 
 
-def entry_stage_key(db: Session, company_id: uuid.UUID) -> str:
-    ensure_default_stages(db, company_id)
-    key = db.scalar(
-        select(PipelineStage.key)
-        .where(PipelineStage.company_id == company_id, PipelineStage.is_entry.is_(True))
-        .order_by(PipelineStage.sort_order)
-        .limit(1)
-    )
-    if key:
-        return key
-    first = db.scalar(
-        select(PipelineStage.key)
-        .where(PipelineStage.company_id == company_id)
-        .order_by(PipelineStage.sort_order)
-        .limit(1)
-    )
-    return first or "new"
+def entry_stage_key(db: Session, project_id: uuid.UUID | None) -> str:
+    if project_id is None:
+        return ENTRY_KEY
+    ensure_default_stages(db, project_id)
+    return ENTRY_KEY
 
 
-def assert_stage_key(db: Session, company_id: uuid.UUID, status: str) -> str:
-    ensure_default_stages(db, company_id)
+def assert_stage_key(db: Session, project_id: uuid.UUID | None, status: str) -> str:
     key = canonicalize_status(status)
+    if project_id is None:
+        if key != ENTRY_KEY:
+            raise _validation("status", "UNKNOWN_STAGE", "Choose a valid pipeline stage.")
+        return ENTRY_KEY
+    ensure_default_stages(db, project_id)
     exists = db.scalar(
         select(PipelineStage.id).where(
-            PipelineStage.company_id == company_id,
+            PipelineStage.project_id == project_id,
             PipelineStage.key == key,
         )
     )
@@ -175,16 +172,13 @@ def assert_stage_key(db: Session, company_id: uuid.UUID, status: str) -> str:
     return key
 
 
-def stage_keys_for_company(db: Session, company_id: uuid.UUID) -> set[str]:
-    return set(
-        db.scalars(select(PipelineStage.key).where(PipelineStage.company_id == company_id)).all()
-    )
-
-
-def _lead_counts(db: Session, company_id: uuid.UUID) -> dict[str, int]:
+def _lead_counts(db: Session, project_id: uuid.UUID) -> dict[str, int]:
     rows = db.execute(
         select(Lead.status, func.count())
-        .where(Lead.company_id == company_id, Lead.is_deleted.is_(False))
+        .where(
+            Lead.project_id == project_id,
+            Lead.is_deleted.is_(False),
+        )
         .group_by(Lead.status)
     ).all()
     counts: dict[str, int] = {}
@@ -194,63 +188,48 @@ def _lead_counts(db: Session, company_id: uuid.UUID) -> dict[str, int]:
     return counts
 
 
-def list_stages(
-    db: Session,
-    actor: User,
-    company_id: uuid.UUID | None,
-) -> PipelineStageListData:
+def list_stages(db: Session, actor: User, project_id: uuid.UUID) -> PipelineStageListData:
     _require_reader(actor)
-    resolved = resolve_company_id(db, actor, company_id)
-    ensure_default_stages(db, resolved)
+    accessible_project(db, actor, project_id)
+    ensure_default_stages(db, project_id)
     db.commit()
     stages = list(
         db.scalars(
             select(PipelineStage)
-            .where(PipelineStage.company_id == resolved)
+            .where(PipelineStage.project_id == project_id)
             .order_by(PipelineStage.sort_order, PipelineStage.label)
         ).all()
     )
-    counts = _lead_counts(db, resolved)
+    counts = _lead_counts(db, project_id)
     return PipelineStageListData(
         items=[to_stage_public(stage, counts.get(stage.key, 0)) for stage in stages],
-        company_id=str(resolved),
+        project_id=str(project_id),
     )
 
 
-def _unique_key(db: Session, company_id: uuid.UUID, label: str) -> str:
+def _unique_key(db: Session, project_id: uuid.UUID, label: str) -> str:
     base = slug_key(label)
-    if not is_valid_key(base):
+    if not is_valid_key(base) or base == ENTRY_KEY:
         base = "stage"
     candidate = base
     index = 2
     while True:
         exists = db.scalar(
             select(PipelineStage.id).where(
-                PipelineStage.company_id == company_id,
+                PipelineStage.project_id == project_id,
                 PipelineStage.key == candidate,
             )
         )
-        if exists is None:
+        if exists is None and candidate != ENTRY_KEY:
             return candidate
         candidate = f"{base}_{index}"[:40]
         index += 1
 
 
-def _clear_entry(db: Session, company_id: uuid.UUID, keep_id: uuid.UUID | None = None) -> None:
-    stmt = (
-        update(PipelineStage)
-        .where(PipelineStage.company_id == company_id, PipelineStage.is_entry.is_(True))
-        .values(is_entry=False, updated_at=datetime.now(UTC))
-    )
-    if keep_id is not None:
-        stmt = stmt.where(PipelineStage.id != keep_id)
-    db.execute(stmt)
-
-
-def _next_sort(db: Session, company_id: uuid.UUID) -> int:
+def _next_sort(db: Session, project_id: uuid.UUID) -> int:
     current = db.scalar(
         select(func.coalesce(func.max(PipelineStage.sort_order), 0)).where(
-            PipelineStage.company_id == company_id
+            PipelineStage.project_id == project_id
         )
     )
     return int(current or 0) + 1
@@ -263,17 +242,17 @@ def create_stage(
     ip_address: str | None,
 ) -> PipelineStage:
     _require_manager(actor)
-    company_id = resolve_company_id(db, actor, payload.company_id)
+    accessible_project(db, actor, payload.project_id)
+    ensure_default_stages(db, payload.project_id)
     now = datetime.now(UTC)
-    if payload.is_entry:
-        _clear_entry(db, company_id)
+    key = _unique_key(db, payload.project_id, payload.label)
     stage = PipelineStage(
-        company_id=company_id,
-        key=_unique_key(db, company_id, payload.label),
+        project_id=payload.project_id,
+        key=key,
         label=payload.label,
         color=payload.color,
-        sort_order=_next_sort(db, company_id),
-        is_entry=payload.is_entry,
+        sort_order=_next_sort(db, payload.project_id),
+        is_entry=False,
         is_won=payload.is_won,
         is_lost=payload.is_lost,
         created_at=now,
@@ -291,7 +270,7 @@ def create_stage(
         actor_id=actor.id,
         target_type="pipeline_stage",
         target_id=stage.id,
-        context={"key": stage.key, "label": stage.label, "company_id": str(company_id)},
+        context={"key": stage.key, "label": stage.label, "project_id": str(payload.project_id)},
         ip_address=ip_address,
     )
     db.commit()
@@ -311,22 +290,29 @@ def update_stage(
     stage = db.get(PipelineStage, stage_id)
     if stage is None:
         raise _not_found()
-    resolve_company_id(db, actor, stage.company_id)
+    accessible_project(db, actor, stage.project_id)
     fields = payload.model_fields_set
     if not fields:
         raise _validation("request", "REQUIRED", "Provide at least one field to update.")
-    if "label" in fields and payload.label is not None:
-        stage.label = payload.label
-    if "color" in fields and payload.color is not None:
-        stage.color = payload.color
-    if "is_won" in fields and payload.is_won is not None:
-        stage.is_won = payload.is_won
-    if "is_lost" in fields and payload.is_lost is not None:
-        stage.is_lost = payload.is_lost
-    if "is_entry" in fields and payload.is_entry is not None:
-        if payload.is_entry:
-            _clear_entry(db, stage.company_id, keep_id=stage.id)
-        stage.is_entry = payload.is_entry
+    locked = _is_locked(stage)
+    if locked:
+        if "label" in fields or "is_won" in fields or "is_lost" in fields:
+            raise AppError(
+                ErrorCode.CONFLICT,
+                "The New stage is fixed for every project. You can only change its color.",
+                409,
+            )
+        if "color" in fields and payload.color is not None:
+            stage.color = payload.color
+    else:
+        if "label" in fields and payload.label is not None:
+            stage.label = payload.label
+        if "color" in fields and payload.color is not None:
+            stage.color = payload.color
+        if "is_won" in fields and payload.is_won is not None:
+            stage.is_won = payload.is_won
+        if "is_lost" in fields and payload.is_lost is not None:
+            stage.is_lost = payload.is_lost
     stage.updated_at = datetime.now(UTC)
     record_audit(
         db,
@@ -349,13 +335,17 @@ def reorder_stages(
     ip_address: str | None,
 ) -> PipelineStageListData:
     _require_manager(actor)
-    company_id = resolve_company_id(db, actor, payload.company_id)
+    accessible_project(db, actor, payload.project_id)
+    ensure_default_stages(db, payload.project_id)
     stages = list(
-        db.scalars(select(PipelineStage).where(PipelineStage.company_id == company_id)).all()
+        db.scalars(select(PipelineStage).where(PipelineStage.project_id == payload.project_id)).all()
     )
     by_id = {stage.id: stage for stage in stages}
     if set(payload.stage_ids) != set(by_id):
-        raise _validation("stage_ids", "MISMATCH", "Send every stage id for this company exactly once.")
+        raise _validation("stage_ids", "MISMATCH", "Send every stage id for this project exactly once.")
+    entry = next((stage for stage in stages if _is_locked(stage)), None)
+    if entry is not None and payload.stage_ids[0] != entry.id:
+        raise _validation("stage_ids", "ENTRY_FIRST", "The New stage must stay first.")
     now = datetime.now(UTC)
     for index, stage_id in enumerate(payload.stage_ids, start=1):
         stage = by_id[stage_id]
@@ -365,13 +355,13 @@ def reorder_stages(
         db,
         action="pipeline_stages_reordered",
         actor_id=actor.id,
-        target_type="company",
-        target_id=company_id,
+        target_type="project",
+        target_id=payload.project_id,
         context={"order": [str(item) for item in payload.stage_ids]},
         ip_address=ip_address,
     )
     db.commit()
-    return list_stages(db, actor, company_id)
+    return list_stages(db, actor, payload.project_id)
 
 
 def delete_stage(
@@ -385,11 +375,14 @@ def delete_stage(
     stage = db.get(PipelineStage, stage_id)
     if stage is None:
         raise _not_found()
-    company_id = resolve_company_id(db, actor, stage.company_id)
+    accessible_project(db, actor, stage.project_id)
+    project_id = stage.project_id
+    if _is_locked(stage):
+        raise AppError(ErrorCode.CONFLICT, "The New stage cannot be removed.", 409)
     remaining = (
         db.scalar(
             select(func.count()).select_from(PipelineStage).where(
-                PipelineStage.company_id == company_id,
+                PipelineStage.project_id == project_id,
                 PipelineStage.id != stage.id,
             )
         )
@@ -400,7 +393,7 @@ def delete_stage(
     lead_count = (
         db.scalar(
             select(func.count()).select_from(Lead).where(
-                Lead.company_id == company_id,
+                Lead.project_id == project_id,
                 Lead.is_deleted.is_(False),
                 Lead.status == stage.key,
             )
@@ -420,7 +413,7 @@ def delete_stage(
             raise _validation("move_to_stage_key", "SAME_STAGE", "Choose a different stage.")
         target = db.scalar(
             select(PipelineStage).where(
-                PipelineStage.company_id == company_id,
+                PipelineStage.project_id == project_id,
                 PipelineStage.key == move_key,
             )
         )
@@ -429,24 +422,13 @@ def delete_stage(
         db.execute(
             update(Lead)
             .where(
-                Lead.company_id == company_id,
+                Lead.project_id == project_id,
                 Lead.is_deleted.is_(False),
                 Lead.status == stage.key,
             )
             .values(status=move_key, updated_at=datetime.now(UTC))
         )
-    was_entry = stage.is_entry
     db.delete(stage)
-    if was_entry:
-        first = db.scalar(
-            select(PipelineStage)
-            .where(PipelineStage.company_id == company_id)
-            .order_by(PipelineStage.sort_order)
-            .limit(1)
-        )
-        if first is not None:
-            first.is_entry = True
-            first.updated_at = datetime.now(UTC)
     record_audit(
         db,
         action="pipeline_stage_deleted",
@@ -457,4 +439,4 @@ def delete_stage(
         ip_address=ip_address,
     )
     db.commit()
-    return company_id
+    return project_id

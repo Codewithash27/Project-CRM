@@ -287,10 +287,11 @@ def create_lead(
         payload.extra_values,
         require_required=True,
     )
+    project_id_for_stage = None if project is None else project.id
     status_key = (
-        entry_stage_key(db, company_id)
+        entry_stage_key(db, project_id_for_stage)
         if payload.status is None
-        else assert_stage_key(db, company_id, payload.status)
+        else assert_stage_key(db, project_id_for_stage, payload.status)
     )
     now = datetime.now(UTC)
     lead = Lead(
@@ -395,7 +396,7 @@ def update_lead(
     if "status" in fields:
         if payload.status is None:
             raise _validation("status", "REQUIRED", "Status is required.")
-        lead.status = assert_stage_key(db, lead.company_id, payload.status)
+        lead.status = assert_stage_key(db, lead.project_id, payload.status)
         changed.append("status")
     if "priority" in fields:
         if payload.priority is None:

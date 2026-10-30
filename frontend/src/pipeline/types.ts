@@ -1,6 +1,6 @@
 export interface PipelineStage {
   id: string
-  company_id: string
+  project_id: string
   key: string
   label: string
   color: string
@@ -8,12 +8,13 @@ export interface PipelineStage {
   is_entry: boolean
   is_won: boolean
   is_lost: boolean
+  is_locked: boolean
   lead_count: number
 }
 
 export interface PipelineStageList {
   items: PipelineStage[]
-  company_id: string
+  project_id: string
 }
 
 export const STAGE_COLOR_PRESETS = [
