@@ -2,8 +2,10 @@ import { ApiError, toApiError, type ApiSuccess } from './errors'
 
 const baseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
+type RefreshResult = 'ok' | 'unauthorized' | 'network'
+
 let csrfToken: string | null = null
-let refreshPromise: Promise<boolean> | null = null
+let refreshPromise: Promise<RefreshResult> | null = null
 let unauthorizedHandler: (() => void) | null = null
 
 const refreshSkipped = new Set([
@@ -34,9 +36,9 @@ export async function ensureCsrf(): Promise<void> {
   csrfToken = body.data.csrf_token
 }
 
-async function refreshSession(): Promise<boolean> {
+async function refreshSession(): Promise<RefreshResult> {
   if (!refreshPromise) {
-    refreshPromise = (async () => {
+    refreshPromise = (async (): Promise<RefreshResult> => {
       try {
         if (!csrfToken) {
           await ensureCsrf()
@@ -50,13 +52,16 @@ async function refreshSession(): Promise<boolean> {
           credentials: 'include',
           headers,
         })
-        return response.ok
+        if (response.ok) return 'ok'
+        // Only treat real auth failures as logout. Backend reloads / blips are network.
+        if (response.status === 401 || response.status === 403) return 'unauthorized'
+        return 'network'
       } catch {
-        return false
+        return 'network'
       }
     })().finally(() => {
       refreshPromise = null
-    })
+    }) as Promise<RefreshResult>
   }
   return refreshPromise
 }
@@ -102,12 +107,21 @@ async function request<T>(
     throw error
   }
 
-  if (response.status === 401 && allowRetry && !refreshSkipped.has(path)) {
+  if (response.status === 401 && allowRetry && !refreshSkipped.has(path.split('?')[0] ?? path)) {
     const refreshed = await refreshSession()
-    if (refreshed) {
+    if (refreshed === 'ok') {
       return request(method, path, body, false)
     }
-    unauthorizedHandler?.()
+    if (refreshed === 'unauthorized') {
+      unauthorizedHandler?.()
+      throw await toApiError(response)
+    }
+    // Backend briefly down (e.g. uvicorn --reload): keep the session, surface a network error.
+    throw new ApiError(
+      'Server is temporarily unavailable. Retry in a moment — you are still signed in.',
+      0,
+      'NETWORK_ERROR',
+    )
   }
 
   if (!response.ok) {

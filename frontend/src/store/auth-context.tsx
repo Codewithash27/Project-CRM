@@ -10,6 +10,7 @@ import {
 } from 'react'
 
 import type { LoginInput, RegisterInput, UserProfile } from '../auth/types'
+import { ApiError } from '../services/api/errors'
 import { api, ensureCsrf, setUnauthorizedHandler } from '../services/api/client'
 
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated'
@@ -39,15 +40,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false
+    async function readMe() {
+      await ensureCsrf()
+      return api.get<UserProfile>('/api/v1/auth/me')
+    }
     async function bootstrap() {
       try {
-        await ensureCsrf()
-        const result = await api.get<UserProfile>('/api/v1/auth/me')
+        const result = await readMe()
         if (!cancelled) {
           setUser(result.data)
           setStatus('authenticated')
         }
-      } catch {
+      } catch (firstError) {
+        // Backend reload / short outage: retry once before treating as logged out.
+        const network =
+          firstError instanceof ApiError &&
+          (firstError.code === 'NETWORK_ERROR' || firstError.status === 0)
+        if (network && !cancelled) {
+          try {
+            await new Promise((resolve) => window.setTimeout(resolve, 900))
+            const result = await readMe()
+            if (!cancelled) {
+              setUser(result.data)
+              setStatus('authenticated')
+            }
+            return
+          } catch {
+            /* fall through */
+          }
+        }
         if (!cancelled) {
           setUser(null)
           setStatus('unauthenticated')

@@ -75,9 +75,11 @@ export function PipelinePage() {
   const [stages, setStages] = useState<PipelineStage[]>([])
   const [leads, setLeads] = useState<Lead[]>([])
   const [projects, setProjects] = useState<LeadProjectOption[]>([])
-  const [loading, setLoading] = useState(true)
+  const [booting, setBooting] = useState(true)
+  const [boardLoading, setBoardLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [projectId, setProjectId] = useState('')
   const [source, setSource] = useState('')
   const [priority, setPriority] = useState('')
@@ -91,11 +93,10 @@ export function PipelinePage() {
   const [moveToKey, setMoveToKey] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const loadProjects = useCallback(async () => {
-    const result = await api.get<{ items: LeadProjectOption[] }>('/api/v1/projects')
-    setProjects(result.data.items)
-    return result.data.items
-  }, [])
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300)
+    return () => window.clearTimeout(timer)
+  }, [search])
 
   const loadStages = useCallback(async (selectedProjectId: string) => {
     if (!selectedProjectId) {
@@ -109,44 +110,52 @@ export function PipelinePage() {
     return result.data.items
   }, [])
 
-  const loadLeads = useCallback(async () => {
-    if (!projectId) {
-      setLeads([])
-      return
-    }
-    const params = new URLSearchParams({ limit: '500', project_id: projectId })
-    if (search.trim()) params.set('search', search.trim())
-    if (source) params.set('source', source)
-    if (priority) params.set('priority', priority)
-    const result = await api.get<LeadList>(`/api/v1/leads?${params}`)
-    setLeads(result.data.items)
-  }, [search, projectId, source, priority])
+  const loadBoard = useCallback(
+    async (selectedProjectId: string, filters: { search: string; source: string; priority: string }) => {
+      if (!selectedProjectId) {
+        setStages([])
+        setLeads([])
+        return
+      }
+      const params = new URLSearchParams({ limit: '500', project_id: selectedProjectId })
+      if (filters.search) params.set('search', filters.search)
+      if (filters.source) params.set('source', filters.source)
+      if (filters.priority) params.set('priority', filters.priority)
+      const [stageResult, leadResult] = await Promise.all([
+        api.get<PipelineStageList>(
+          `/api/v1/pipeline-stages?project_id=${encodeURIComponent(selectedProjectId)}`,
+        ),
+        api.get<LeadList>(`/api/v1/leads?${params}`),
+      ])
+      setStages(stageResult.data.items)
+      setLeads(leadResult.data.items)
+    },
+    [],
+  )
 
   useEffect(() => {
     let cancelled = false
     async function boot() {
-      setLoading(true)
+      setBooting(true)
       setError(null)
       try {
-        const list = await loadProjects()
+        const result = await api.get<{ items: LeadProjectOption[] }>('/api/v1/projects')
         if (cancelled) return
-        if (!projectId && list.length > 0) {
-          setProjectId(list[0].id)
-        }
+        setProjects(result.data.items)
+        setProjectId((current) => current || result.data.items[0]?.id || '')
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof ApiError ? err.message : 'Could not load projects.')
         }
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) setBooting(false)
       }
     }
     void boot()
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only boot once for project list
-  }, [loadProjects])
+  }, [])
 
   useEffect(() => {
     if (!projectId) {
@@ -157,22 +166,26 @@ export function PipelinePage() {
     let cancelled = false
     async function refresh() {
       setError(null)
-      setLoading(true)
+      setBoardLoading(true)
       try {
-        await Promise.all([loadStages(projectId), loadLeads()])
+        await loadBoard(projectId, {
+          search: debouncedSearch,
+          source,
+          priority,
+        })
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof ApiError ? err.message : 'Could not load the pipeline.')
         }
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) setBoardLoading(false)
       }
     }
     void refresh()
     return () => {
       cancelled = true
     }
-  }, [projectId, loadStages, loadLeads])
+  }, [projectId, debouncedSearch, source, priority, loadBoard])
 
   const selectedProject = projects.find((project) => project.id === projectId)
 
@@ -198,6 +211,11 @@ export function PipelinePage() {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not move the lead.')
     }
+  }
+
+  async function reloadBoard() {
+    if (!projectId) return
+    await loadBoard(projectId, { search: debouncedSearch, source, priority })
   }
 
   async function saveStage(event: FormEvent) {
@@ -244,7 +262,7 @@ export function PipelinePage() {
       await api.delete(`/api/v1/pipeline-stages/${deleteStage.id}${q}`)
       setDeleteStage(null)
       setMoveToKey('')
-      await Promise.all([loadStages(projectId), loadLeads()])
+      await reloadBoard()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not delete the stage.')
     } finally {
@@ -275,7 +293,7 @@ export function PipelinePage() {
     }
   }
 
-  if (loading && projects.length === 0) return <LoadingScreen />
+  if (booting && projects.length === 0) return <LoadingScreen />
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, minHeight: 0, height: '100%' }}>
@@ -376,6 +394,8 @@ export function PipelinePage() {
             flex: 1,
             alignItems: 'stretch',
             minHeight: 420,
+            opacity: boardLoading ? 0.65 : 1,
+            transition: 'opacity 0.15s ease',
           }}
         >
           {stages.map((stage) => {
