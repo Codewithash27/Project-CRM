@@ -80,7 +80,7 @@ async def test_super_admin_assigns_project_to_business_owner(client):
     # Creating a project auto-assigns every owner of that business.
     assert {item["user_id"] for item in data["assignments"]} == {str(owner_a), str(owner_b)}
 
-    removed = await client.put(
+    removed = await client.patch(
         "/api/v1/team/assignments",
         json={"project_id": project_id, "user_id": str(owner_b), "assigned": False},
         headers=await csrf_headers(client),
@@ -118,7 +118,7 @@ async def test_owner_assigns_salesperson_adds_rep_and_moves_leads(client):
     assert board.json()["data"]["mode"] == "owner"
     assert board.json()["data"]["viewer"]["id"] == str(owner_id)
 
-    assigned = await client.put(
+    assigned = await client.patch(
         "/api/v1/team/assignments",
         json={"project_id": project_id, "user_id": str(rep_id), "assigned": True},
         headers=await csrf_headers(client),

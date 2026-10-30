@@ -129,7 +129,7 @@ export function TeamPage() {
     setError('')
     setNotice('')
     try {
-      const result = await api.put<TeamBoard>('/api/v1/team/assignments', {
+      const result = await api.patch<TeamBoard>('/api/v1/team/assignments', {
         project_id: project.id,
         user_id: person.id,
         assigned: next,

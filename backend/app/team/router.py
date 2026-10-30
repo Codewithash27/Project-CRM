@@ -39,13 +39,13 @@ def get_team(
     return ApiResponse(data=get_team_board(db, actor, company_id), message="Success")
 
 
-@router.put(
+@router.patch(
     "/assignments",
     response_model=ApiResponse[TeamBoardData],
     summary="Assign or unassign a person on a project",
     responses=error_responses(401, 403, 422),
 )
-def put_assignment(
+def patch_assignment(
     payload: SetAssignmentRequest,
     request: Request,
     db: Session = Depends(get_db),
