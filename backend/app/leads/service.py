@@ -19,6 +19,7 @@ from app.core.logging import log_event
 from app.lead_fields.service import normalize_extra_values
 from app.leads.models import Lead
 from app.leads.schemas import CreateLeadRequest, UpdateLeadRequest, normalize_priority, normalize_status
+from app.pipeline.service import assert_stage_key, entry_stage_key
 
 _PRIORITY_FILTER_VALUES: dict[str, tuple[str, ...]] = {
     "high": ("high", "Hot"),
@@ -27,10 +28,12 @@ _PRIORITY_FILTER_VALUES: dict[str, tuple[str, ...]] = {
 }
 _STATUS_FILTER_VALUES: dict[str, tuple[str, ...]] = {
     "new": ("new", "New"),
-    "contacted": ("contacted", "Contacted", "In Progress", "Nurture"),
-    "qualified": ("qualified", "Qualified", "Won"),
-    "unqualified": ("unqualified",),
-    "lost": ("lost", "Lost"),
+    "contacted": ("contacted", "Contacted"),
+    "in_progress": ("in_progress", "In Progress"),
+    "qualified": ("qualified", "Qualified"),
+    "won": ("won", "Won"),
+    "lost": ("lost", "Lost", "unqualified"),
+    "nurture": ("nurture", "Nurture"),
 }
 from app.organization.models import ACTIVE, Company, Project
 from app.permissions.service import get_permission_keys
@@ -214,7 +217,8 @@ def list_leads(
     if filters.owner_id is not None:
         conditions.append(Lead.owner_id == filters.owner_id)
     if filters.status is not None:
-        status_values = _STATUS_FILTER_VALUES.get(normalize_status(filters.status), (filters.status,))
+        key = normalize_status(filters.status)
+        status_values = _STATUS_FILTER_VALUES.get(key, (key, filters.status))
         conditions.append(Lead.status.in_(status_values))
     if filters.priority is not None:
         priority_values = _PRIORITY_FILTER_VALUES.get(normalize_priority(filters.priority), (filters.priority,))
@@ -283,6 +287,11 @@ def create_lead(
         payload.extra_values,
         require_required=True,
     )
+    status_key = (
+        entry_stage_key(db, company_id)
+        if payload.status is None
+        else assert_stage_key(db, company_id, payload.status)
+    )
     now = datetime.now(UTC)
     lead = Lead(
         company_id=company_id,
@@ -300,7 +309,7 @@ def create_lead(
         lead_source=payload.lead_source,
         owner_id=owner_id,
         created_by_id=actor.id,
-        status=payload.status,
+        status=status_key,
         priority=payload.priority,
         next_followup_at=payload.next_followup_at,
         extra_values=extras or None,
@@ -386,7 +395,7 @@ def update_lead(
     if "status" in fields:
         if payload.status is None:
             raise _validation("status", "REQUIRED", "Status is required.")
-        lead.status = payload.status
+        lead.status = assert_stage_key(db, lead.company_id, payload.status)
         changed.append("status")
     if "priority" in fields:
         if payload.priority is None:

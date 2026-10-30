@@ -1,4 +1,13 @@
-export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'unqualified' | 'lost'
+export type LeadStatus =
+  | 'new'
+  | 'contacted'
+  | 'in_progress'
+  | 'qualified'
+  | 'won'
+  | 'lost'
+  | 'nurture'
+  | 'unqualified'
+  | (string & {})
 export type LeadPriority = 'low' | 'medium' | 'high'
 
 export interface Lead {
@@ -54,15 +63,26 @@ export interface LeadList {
   total: number
 }
 
-export const LEAD_STATUSES: LeadStatus[] = ['new', 'contacted', 'qualified', 'unqualified', 'lost']
+export const LEAD_STATUSES: LeadStatus[] = [
+  'new',
+  'contacted',
+  'in_progress',
+  'qualified',
+  'won',
+  'lost',
+  'nurture',
+]
 export const LEAD_PRIORITIES: LeadPriority[] = ['high', 'medium', 'low']
 
-export const STATUS_LABEL: Record<LeadStatus, string> = {
+export const STATUS_LABEL: Record<string, string> = {
   new: 'New',
   contacted: 'Contacted',
+  in_progress: 'In Progress',
   qualified: 'Qualified',
-  unqualified: 'Unqualified',
+  won: 'Won',
   lost: 'Lost',
+  nurture: 'Nurture',
+  unqualified: 'Unqualified',
 }
 
 export const PRIORITY_LABEL: Record<LeadPriority, string> = {
@@ -77,10 +97,13 @@ export const PRIORITY_TONE: Record<LeadPriority, { bg: string; color: string }> 
   low: { bg: '#dbeafe', color: '#1d4ed8' },
 }
 
-export const STATUS_TONE: Record<LeadStatus, { bg: string; color: string }> = {
+export const STATUS_TONE: Record<string, { bg: string; color: string }> = {
   new: { bg: '#e0e7ff', color: '#3730a3' },
-  contacted: { bg: '#fef3c7', color: '#92400e' },
+  contacted: { bg: '#dbeafe', color: '#1d4ed8' },
+  in_progress: { bg: '#ffedd5', color: '#c2410c' },
   qualified: { bg: '#d1fae5', color: '#047857' },
-  unqualified: { bg: '#f1f5f9', color: '#475569' },
+  won: { bg: '#a7f3d0', color: '#065f46' },
   lost: { bg: '#fee2e2', color: '#b91c1c' },
+  nurture: { bg: '#ede9fe', color: '#5b21b6' },
+  unqualified: { bg: '#f1f5f9', color: '#475569' },
 }

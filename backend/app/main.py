@@ -21,6 +21,7 @@ from app.core.security_headers import SecurityHeadersMiddleware
 from app.lead_fields.router import router as lead_fields_router
 from app.leads.router import router as leads_router
 from app.permissions.router import router as permissions_router
+from app.pipeline.router import router as pipeline_router
 from app.projects.router import router as projects_router
 from app.roles.router import router as roles_router
 from app.team.router import router as team_router
@@ -129,6 +130,7 @@ def create_app() -> FastAPI:
     app.include_router(users_router, prefix="/api/v1/users", tags=["Users"])
     app.include_router(leads_router, prefix="/api/v1/leads", tags=["Leads"])
     app.include_router(lead_fields_router, prefix="/api/v1/lead-fields", tags=["Lead Fields"])
+    app.include_router(pipeline_router, prefix="/api/v1/pipeline-stages", tags=["Pipeline"])
     app.include_router(projects_router, prefix="/api/v1/projects", tags=["Projects"])
     app.include_router(team_router, prefix="/api/v1/team", tags=["Team"])
     app.include_router(roles_router, prefix="/api/v1/roles", tags=["Roles"])

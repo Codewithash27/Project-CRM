@@ -544,10 +544,11 @@ async def test_lead_validation_rejects_incomplete_or_unknown_values(client):
 
     bad_status = await client.post(
         "/api/v1/leads",
-        json=_lead_payload(status="won", project_id=str(project_id)),
+        json=_lead_payload(status="not_a_real_stage", project_id=str(project_id)),
         headers=headers,
     )
     assert bad_status.status_code == 422
+    assert bad_status.json()["error"]["details"][0]["field"] == "status"
 
     no_csrf = await client.post("/api/v1/leads", json=_lead_payload(project_id=str(project_id)))
     assert no_csrf.status_code == 403

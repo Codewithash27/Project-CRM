@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from app.auth.schemas import normalize_email
 from app.leads.models import Lead
 
-LeadStatus = Literal["new", "contacted", "qualified", "unqualified", "lost"]
+LeadStatus = str
 LeadPriority = Literal["low", "medium", "high"]
 
 # Demo seed rows used title-case labels; API always returns canonical values.
@@ -26,15 +26,18 @@ _STATUS_PUBLIC = {
     "new": "new",
     "contacted": "contacted",
     "qualified": "qualified",
-    "unqualified": "unqualified",
+    "unqualified": "lost",
     "lost": "lost",
     "New": "new",
     "Contacted": "contacted",
-    "In Progress": "contacted",
+    "In Progress": "in_progress",
+    "in_progress": "in_progress",
     "Qualified": "qualified",
-    "Won": "qualified",
+    "Won": "won",
+    "won": "won",
     "Lost": "lost",
-    "Nurture": "contacted",
+    "Nurture": "nurture",
+    "nurture": "nurture",
 }
 
 
@@ -43,8 +46,11 @@ def normalize_priority(value: str) -> str:
 
 
 def normalize_status(value: str) -> str:
-    return _STATUS_PUBLIC.get(value, "new")
-
+    mapped = _STATUS_PUBLIC.get(value)
+    if mapped is not None:
+        return mapped
+    cleaned = value.strip().lower().replace(" ", "_")
+    return cleaned[:40] or "new"
 
 def _collapse(value: str) -> str:
     return " ".join(value.split())
@@ -73,7 +79,7 @@ class CreateLeadRequest(BaseModel):
     owner_id: uuid.UUID | None = None
     company_id: uuid.UUID | None = None
     project_id: uuid.UUID | None = None
-    status: LeadStatus = "new"
+    status: str | None = Field(default=None, max_length=40)
     priority: LeadPriority = "medium"
     next_followup_at: datetime
     extra_values: dict[str, Any] | None = None
@@ -124,7 +130,7 @@ class UpdateLeadRequest(BaseModel):
     lead_source: str | None = Field(default=None, max_length=80)
     owner_id: uuid.UUID | None = None
     project_id: uuid.UUID | None = None
-    status: LeadStatus | None = None
+    status: str | None = Field(default=None, max_length=40)
     priority: LeadPriority | None = None
     next_followup_at: datetime | None = None
     extra_values: dict[str, Any] | None = None

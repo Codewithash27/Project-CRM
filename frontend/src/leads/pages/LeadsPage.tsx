@@ -794,7 +794,10 @@ export function LeadsPage() {
                   <TableCell>{lead.project_name || '—'}</TableCell>
                   <TableCell>{lead.mobile}</TableCell>
                   <TableCell>
-                    <ToneChip label={STATUS_LABEL[lead.status]} {...STATUS_TONE[lead.status]} />
+                    <ToneChip
+                      label={STATUS_LABEL[lead.status] ?? lead.status}
+                      {...(STATUS_TONE[lead.status] ?? { bg: '#f1f5f9', color: '#475569' })}
+                    />
                   </TableCell>
                   <TableCell>
                     <ToneChip label={PRIORITY_LABEL[lead.priority]} {...PRIORITY_TONE[lead.priority]} />

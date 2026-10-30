@@ -43,7 +43,7 @@
     "reminders": "What is due today. Log Connected, No answer, Snooze, or Skip.",
     "leads": "Enquiries for the projects you can open. A salesperson creates them. An owner reviews them.",
     "leadFields": "Extra fields for one project. They show on Create lead and in the lead panel.",
-    "pipeline": "New, Contacted, In Progress, Qualified, Won, Lost, and Nurture.",
+    "pipeline": "Kanban board by stage. Owners can add, recolor, reorder, or remove stages. New leads start in New.",
     "followUps": "Open follow-ups with the plan step, due date, and priority.",
     "kpis": "Won value, pipeline value, and counts by status and source.",
     "campaigns": "Leads and won value by source, split by project. Read only."

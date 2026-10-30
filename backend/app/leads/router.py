@@ -14,7 +14,6 @@ from app.leads.schemas import (
     LeadListData,
     LeadPriority,
     LeadPublic,
-    LeadStatus,
     UpdateLeadRequest,
     to_lead_public,
 )
@@ -75,13 +74,13 @@ def get_leads(
     actor: User = Depends(require_permission("leads.read")),
     db: Session = Depends(get_db),
     search: str | None = Query(default=None, max_length=100),
-    status_filter: LeadStatus | None = Query(default=None, alias="status"),
+    status_filter: str | None = Query(default=None, alias="status", max_length=40),
     owner_id: uuid.UUID | None = Query(default=None),
     source: str | None = Query(default=None, max_length=80),
     priority: LeadPriority | None = Query(default=None),
     next_followup_at: date | None = Query(default=None),
     project_id: uuid.UUID | None = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=100),
+    limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> ApiResponse[LeadListData]:
     leads, total = list_leads(

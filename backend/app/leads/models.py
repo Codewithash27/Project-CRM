@@ -60,11 +60,6 @@ class Lead(Base):
     __tablename__ = "leads"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('new', 'contacted', 'qualified', 'unqualified', 'lost', "
-            "'New', 'Contacted', 'In Progress', 'Qualified', 'Won', 'Lost', 'Nurture')",
-            name="ck_leads_status",
-        ),
-        CheckConstraint(
             "priority IN ('low', 'medium', 'high', 'Hot', 'Warm', 'Cold')",
             name="ck_leads_priority",
         ),
