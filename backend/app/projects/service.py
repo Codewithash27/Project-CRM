@@ -13,6 +13,7 @@ from app.leads.models import Lead
 from app.organization.models import ACTIVE, Company, Project
 from app.projects.schemas import TEMPLATES, CreateProjectRequest, ProjectPublic
 from app.roles.service import RoleName
+from app.team.service import ensure_project_owners, project_ids_for_member
 from app.users.models import User
 
 TEMPLATE_DESCRIPTION = {
@@ -77,6 +78,12 @@ def list_projects(db: Session, actor: User) -> tuple[list[ProjectPublic], list[C
     stmt = select(Project, Company.name).join(Company, Company.id == Project.company_id)
     if company_filter is not None:
         stmt = stmt.where(Project.company_id == company_filter)
+        # Business owners only see projects Super Admin assigned to them.
+        if not can_create_projects(actor):
+            member_ids = project_ids_for_member(db, actor.id)
+            if not member_ids:
+                return [], []
+            stmt = stmt.where(Project.id.in_(member_ids))
     elif not can_create_projects(actor):
         return [], []
     rows = db.execute(stmt.order_by(Company.name, Project.name)).all()
@@ -134,6 +141,7 @@ def create_project(
             "DUPLICATE_CODE",
             "This business already has a project with that short code.",
         ) from exc
+    ensure_project_owners(db, project, actor.id)
     record_audit(
         db,
         action="project_created",

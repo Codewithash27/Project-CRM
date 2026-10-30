@@ -34,7 +34,7 @@ export type MatrixColumn = (typeof MATRIX_COLUMNS)[number]
 
 /** Fixed menus for the four product roles. */
 export const SYSTEM_ROLE_MENUS: Record<string, string[]> = {
-  SUPER_ADMIN: ['Businesses', 'Plans', 'Projects', 'Users', 'Roles'],
+  SUPER_ADMIN: ['Businesses', 'Plans', 'Projects', 'Users', 'Roles', 'Team'],
   BUSINESS_OWNER: ['Home', 'Projects', 'Team', 'Leads', 'Pipeline', 'Follow-ups', 'KPIs'],
   MARKETING: ['Campaigns'],
   SALESPERSON: ['Reminders', 'Leads', 'Pipeline', 'Follow-ups', 'KPIs'],

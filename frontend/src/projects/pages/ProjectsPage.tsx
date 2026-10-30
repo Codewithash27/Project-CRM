@@ -161,8 +161,8 @@ export function ProjectsPage() {
           <Typography variant="h1">Projects</Typography>
           <Typography color="text.secondary">
             {data?.can_create
-              ? 'Create a project and assign it to a business. That business owner then sees it and can give it to salespeople on Team.'
-              : 'Projects given to your business by the platform admin. Each one has its own lead numbers.'}
+              ? 'Create a project under a business. Owners of that business are assigned automatically — fine-tune on Team.'
+              : 'Projects the platform admin assigned to you. Each one has its own lead numbers.'}
           </Typography>
         </Stack>
         {data?.can_create ? (

@@ -5,6 +5,7 @@ import { AccessDeniedPage } from '../../access/pages/AccessDeniedPage'
 import { HomePage } from '../../access/pages/HomePage'
 import { ProjectsPage } from '../../projects/pages/ProjectsPage'
 import { RolesPage } from '../../roles/pages/RolesPage'
+import { TeamPage } from '../../team/pages/TeamPage'
 import { UsersPage } from '../../users/pages/UsersPage'
 import { ForgotPasswordPage } from '../../auth/pages/ForgotPasswordPage'
 import { LoginPage } from '../../auth/pages/LoginPage'
@@ -40,6 +41,7 @@ export function AppRoutes() {
         <Route index element={<HomePage />} />
         <Route path="access-denied" element={<AccessDeniedPage />} />
         <Route path="projects" element={<ProjectsPage />} />
+        <Route path="team" element={<TeamPage />} />
         <Route
           path="users"
           element={
@@ -58,7 +60,12 @@ export function AppRoutes() {
         />
         <Route path="admin/access" element={<Navigate to="/app/users" replace />} />
         {NAV_ITEMS.filter(
-          (item) => item.id !== 'home' && item.id !== 'users' && item.id !== 'roles' && item.id !== 'projects',
+          (item) =>
+            item.id !== 'home' &&
+            item.id !== 'users' &&
+            item.id !== 'roles' &&
+            item.id !== 'projects' &&
+            item.id !== 'team',
         ).map((item) => (
           <Route key={item.id} path={item.path.replace('/app/', '')} element={<NavPlaceholder id={item.id} />} />
         ))}

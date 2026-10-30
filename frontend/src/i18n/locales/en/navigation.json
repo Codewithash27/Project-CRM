@@ -39,7 +39,7 @@
     "projects": "A line of work with its own lead numbers, such as PRESCHOOL-0001.",
     "users": "Create the Business Owner first, then the other people in that business.",
     "roles": "See which role opens which menu, and create a custom role.",
-    "team": "Tick which salesperson works on which project, and move leads when the team changes.",
+    "team": "Super Admin assigns projects to business owners. Business owners assign salespeople and can move leads.",
     "reminders": "What is due today. Log Connected, No answer, Snooze, or Skip.",
     "leads": "Enquiries for the projects you can open. A salesperson creates them. An owner reviews them.",
     "leadFields": "Extra fields for one project. They show on Create lead and in the lead panel.",
@@ -49,7 +49,7 @@
     "campaigns": "Leads and won value by source, split by project. Read only."
   },
   "roleIntro": {
-    "SUPER_ADMIN": "You create businesses, projects, users, and roles. Assign each project to a business so its owner can see it.",
+    "SUPER_ADMIN": "You create businesses, projects, users, and roles. On Team, assign each project to the business owners who should see it.",
     "BUSINESS_OWNER": "You assign salespeople to projects and watch every lead. You do not work the calls.",
     "SALESPERSON": "You work the leads in the projects assigned to you.",
     "MARKETING": "You see campaign results only. Lead notes stay hidden.",

@@ -31,8 +31,8 @@ describe('visibleNav', () => {
     ])
   })
 
-  it('gives a super admin businesses, projects, users, and roles', () => {
-    expect(ids(['SUPER_ADMIN'])).toEqual(['businesses', 'projects', 'users', 'roles'])
+  it('gives a super admin businesses, projects, users, roles, and team', () => {
+    expect(ids(['SUPER_ADMIN'])).toEqual(['businesses', 'projects', 'users', 'roles', 'team'])
   })
 
   it('gives marketing campaigns only', () => {
