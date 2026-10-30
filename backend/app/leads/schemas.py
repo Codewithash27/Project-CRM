@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -76,6 +76,7 @@ class CreateLeadRequest(BaseModel):
     status: LeadStatus = "new"
     priority: LeadPriority = "medium"
     next_followup_at: datetime
+    extra_values: dict[str, Any] | None = None
 
     @field_validator("full_name")
     @classmethod
@@ -126,6 +127,7 @@ class UpdateLeadRequest(BaseModel):
     status: LeadStatus | None = None
     priority: LeadPriority | None = None
     next_followup_at: datetime | None = None
+    extra_values: dict[str, Any] | None = None
 
     @field_validator("full_name")
     @classmethod
@@ -181,6 +183,7 @@ class LeadPublic(BaseModel):
     status: str
     priority: str
     next_followup_at: datetime | None
+    extra_values: dict[str, Any]
     is_deleted: bool
     created_at: datetime
     updated_at: datetime
@@ -193,6 +196,7 @@ class LeadListData(BaseModel):
 
 def to_lead_public(lead: Lead, project_name: str | None = None) -> LeadPublic:
     expected = None if lead.expected_value is None else f"{lead.expected_value:.2f}"
+    extras = lead.extra_values if isinstance(lead.extra_values, dict) else {}
     return LeadPublic(
         id=str(lead.id),
         company_id=str(lead.company_id),
@@ -214,6 +218,7 @@ def to_lead_public(lead: Lead, project_name: str | None = None) -> LeadPublic:
         status=normalize_status(lead.status),
         priority=normalize_priority(lead.priority),
         next_followup_at=lead.next_followup_at,
+        extra_values=extras,
         is_deleted=lead.is_deleted,
         created_at=lead.created_at,
         updated_at=lead.updated_at,

@@ -22,6 +22,7 @@ export interface Lead {
   status: LeadStatus
   priority: LeadPriority
   next_followup_at: string | null
+  extra_values: Record<string, unknown>
   is_deleted: boolean
   created_at: string
   updated_at: string

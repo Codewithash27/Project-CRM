@@ -1,6 +1,10 @@
 # Aadi CRM authentication foundation
 
-This repository contains the authentication and role-based access foundation for Aadi CRM. It does not include leads, pipeline, follow-ups, or other CRM features.
+This repository contains the authentication and role-based access foundation for Aadi CRM, plus leads and projects.
+
+**New to this project?** Use the simple college guide: [SETUP_FOR_COLLEGE.md](simple setup.md) (Postgres install, DB design, seed logins, run steps).
+
+**Cursor / AI setup?** Paste the master prompt from [prompt.md](prompt.md) after unzipping the folder.
 
 ## Applications
 

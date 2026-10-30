@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { GuestRoute, PermissionRoute, ProtectedRoute } from '../../access/components/RouteGuards'
 import { AccessDeniedPage } from '../../access/pages/AccessDeniedPage'
 import { HomePage } from '../../access/pages/HomePage'
+import { LeadFieldsPage } from '../../lead-fields/pages/LeadFieldsPage'
 import { LeadsPage } from '../../leads/pages/LeadsPage'
 import { ProjectsPage } from '../../projects/pages/ProjectsPage'
 import { RemindersPage } from '../../reminders/pages/RemindersPage'
@@ -45,6 +46,7 @@ export function AppRoutes() {
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="team" element={<TeamPage />} />
         <Route path="leads" element={<LeadsPage />} />
+        <Route path="lead-fields" element={<LeadFieldsPage />} />
         <Route path="reminders" element={<RemindersPage />} />
         <Route
           path="users"
@@ -71,6 +73,7 @@ export function AppRoutes() {
             item.id !== 'projects' &&
             item.id !== 'team' &&
             item.id !== 'leads' &&
+            item.id !== 'leadFields' &&
             item.id !== 'reminders',
         ).map((item) => (
           <Route key={item.id} path={item.path.replace('/app/', '')} element={<NavPlaceholder id={item.id} />} />

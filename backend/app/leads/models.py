@@ -18,6 +18,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import Uuid
 
@@ -128,6 +129,7 @@ class Lead(Base):
     status: Mapped[str] = mapped_column(String(30), nullable=False, server_default=text("'new'"))
     priority: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'medium'"))
     next_followup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    extra_values: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

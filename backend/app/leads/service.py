@@ -16,6 +16,7 @@ from app.access.scope import record_is_in_scope, resolve_record_scope
 from app.audit.service import record_audit
 from app.common.exceptions import AppError, ErrorCode
 from app.core.logging import log_event
+from app.lead_fields.service import normalize_extra_values
 from app.leads.models import Lead
 from app.leads.schemas import CreateLeadRequest, UpdateLeadRequest, normalize_priority, normalize_status
 
@@ -276,6 +277,12 @@ def create_lead(
     _owner_for_company(db, actor, owner_id, company_id, reassigning=owner_id != actor.id)
     require_project = RoleName.SALESPERSON in _role_names(actor) and RoleName.SUPER_ADMIN not in _role_names(actor)
     project = _project_for_lead(db, actor, company_id, payload.project_id, required=require_project)
+    extras = normalize_extra_values(
+        db,
+        None if project is None else project.id,
+        payload.extra_values,
+        require_required=True,
+    )
     now = datetime.now(UTC)
     lead = Lead(
         company_id=company_id,
@@ -296,6 +303,7 @@ def create_lead(
         status=payload.status,
         priority=payload.priority,
         next_followup_at=payload.next_followup_at,
+        extra_values=extras or None,
         is_deleted=False,
         created_at=now,
         updated_at=now,
@@ -401,6 +409,16 @@ def update_lead(
         )
         lead.project_id = None if project is None else project.id
         changed.append("project_id")
+    if "extra_values" in fields:
+        target_project_id = lead.project_id
+        extras = normalize_extra_values(
+            db,
+            target_project_id,
+            payload.extra_values,
+            require_required=True,
+        )
+        lead.extra_values = extras or None
+        changed.append("extra_values")
     if "owner_id" in fields:
         if payload.owner_id is None:
             raise _validation("owner_id", "REQUIRED", "Owner is required.")

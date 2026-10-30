@@ -2,11 +2,13 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   MenuItem,
   Stack,
   Table,
@@ -19,10 +21,12 @@ import {
   useMediaQuery,
 } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
-import { FormEvent, useCallback, useEffect, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 
 import { ErrorAlert } from '../../components/common/ErrorAlert'
 import { LoadingScreen } from '../../components/common/LoadingScreen'
+import type { LeadField, LeadFieldList } from '../../lead-fields/types'
+import { OPTION_TYPES } from '../../lead-fields/types'
 import { ApiError } from '../../services/api/errors'
 import { api } from '../../services/api/client'
 import { useAuth } from '../../store/auth-context'
@@ -73,6 +77,7 @@ type LeadForm = {
   status: LeadStatus
   priority: LeadPriority
   next_followup_at: string
+  extra_values: Record<string, string | string[] | boolean>
 }
 
 function blankForm(projectId = ''): LeadForm {
@@ -89,7 +94,27 @@ function blankForm(projectId = ''): LeadForm {
     status: 'new',
     priority: 'medium',
     next_followup_at: defaultFollowupLocal(),
+    extra_values: {},
   }
+}
+
+function formatExtraDisplay(value: unknown): string {
+  if (value == null || value === '') return '—'
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  if (Array.isArray(value)) return value.length ? value.join(', ') : '—'
+  return String(value)
+}
+
+function extraFromLead(lead: Lead): Record<string, string | string[] | boolean> {
+  const next: Record<string, string | string[] | boolean> = {}
+  for (const [key, value] of Object.entries(lead.extra_values ?? {})) {
+    if (typeof value === 'boolean' || typeof value === 'string' || Array.isArray(value)) {
+      next[key] = value as string | string[] | boolean
+    } else if (typeof value === 'number') {
+      next[key] = String(value)
+    }
+  }
+  return next
 }
 
 export function LeadsPage() {
@@ -118,6 +143,32 @@ export function LeadsPage() {
   const [editLead, setEditLead] = useState<Lead | null>(null)
   const [form, setForm] = useState<LeadForm>(blankForm())
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [projectFields, setProjectFields] = useState<LeadField[]>([])
+  const [listFields, setListFields] = useState<LeadField[]>([])
+
+  const activeFields = useMemo(
+    () => projectFields.filter((field) => field.is_active),
+    [projectFields],
+  )
+
+  const fetchFields = useCallback(async (selected: string) => {
+    if (!selected) return [] as LeadField[]
+    try {
+      const result = await api.get<LeadFieldList>(`/api/v1/lead-fields?project_id=${selected}`)
+      return result.data.items
+    } catch {
+      return [] as LeadField[]
+    }
+  }, [])
+
+  const loadProjectFields = useCallback(
+    async (selected: string) => {
+      const items = await fetchFields(selected)
+      setProjectFields(items)
+      return items
+    },
+    [fetchFields],
+  )
 
   const loadProjects = useCallback(async () => {
     try {
@@ -165,14 +216,27 @@ export function LeadsPage() {
     void load()
   }, [load])
 
+  useEffect(() => {
+    void (async () => {
+      if (!projectFilter) {
+        setListFields([])
+        return
+      }
+      const fields = await fetchFields(projectFilter)
+      setListFields(fields.filter((field) => field.is_active && field.show_in_list))
+    })()
+  }, [fetchFields, projectFilter])
+
   async function openCreate() {
     const list = projects.length ? projects : await loadProjects()
-    setForm(blankForm(list[0]?.id ?? ''))
+    const first = list[0]?.id ?? ''
+    setForm(blankForm(first))
     setFieldErrors({})
+    await loadProjectFields(first)
     setCreateOpen(true)
   }
 
-  function openEdit(lead: Lead) {
+  async function openEdit(lead: Lead) {
     setEditLead(lead)
     setForm({
       project_id: lead.project_id ?? '',
@@ -189,8 +253,10 @@ export function LeadsPage() {
       next_followup_at: lead.next_followup_at
         ? toDatetimeLocalValue(new Date(lead.next_followup_at))
         : defaultFollowupLocal(),
+      extra_values: extraFromLead(lead),
     })
     setFieldErrors({})
+    await loadProjectFields(lead.project_id ?? '')
   }
 
   function validate(): boolean {
@@ -202,11 +268,30 @@ export function LeadsPage() {
     if (!form.next_followup_at || !localInputToIso(form.next_followup_at)) {
       next.next_followup_at = 'Choose the next follow-up.'
     }
+    for (const field of activeFields) {
+      if (!field.is_required) continue
+      const value = form.extra_values[field.key]
+      const empty =
+        value == null ||
+        value === '' ||
+        (Array.isArray(value) && value.length === 0) ||
+        (field.field_type === 'check' && value !== true)
+      if (empty) next[`extra_values.${field.key}`] = `${field.label} is required.`
+    }
     setFieldErrors(next)
     return Object.keys(next).length === 0
   }
 
   function payloadFromForm() {
+    const extras: Record<string, unknown> = {}
+    for (const field of activeFields) {
+      const value = form.extra_values[field.key]
+      if (value === undefined || value === '') continue
+      if (Array.isArray(value) && value.length === 0) continue
+      extras[field.key] = field.field_type === 'number' && typeof value === 'string' && value.trim()
+        ? Number(value)
+        : value
+    }
     return {
       project_id: form.project_id || null,
       full_name: form.full_name.trim(),
@@ -220,7 +305,15 @@ export function LeadsPage() {
       status: form.status,
       priority: form.priority,
       next_followup_at: localInputToIso(form.next_followup_at),
+      extra_values: extras,
     }
+  }
+
+  function setExtra(key: string, value: string | string[] | boolean) {
+    setForm((current) => ({
+      ...current,
+      extra_values: { ...current.extra_values, [key]: value },
+    }))
   }
 
   async function onCreate(event: FormEvent) {
@@ -306,7 +399,11 @@ export function LeadsPage() {
                 ? `Lead number will use ${selected.code}-…`
                 : 'Which project did this enquiry come for?')
           }
-          onChange={(event) => setForm((current) => ({ ...current, project_id: event.target.value }))}
+          onChange={(event) => {
+            const nextProject = event.target.value
+            setForm((current) => ({ ...current, project_id: nextProject, extra_values: {} }))
+            void loadProjectFields(nextProject)
+          }}
         >
           {projects.map((project) => (
             <MenuItem key={project.id} value={project.id}>
@@ -447,6 +544,109 @@ export function LeadsPage() {
           helperText={fieldErrors.next_followup_at || 'When will you call them next?'}
           onChange={(event) => setForm((current) => ({ ...current, next_followup_at: event.target.value }))}
         />
+
+        {activeFields.length ? (
+          <Stack spacing={1.5} sx={{ pt: 1 }}>
+            <Typography variant="subtitle2" color="text.secondary">
+              Project fields{selected ? ` · ${selected.name}` : ''}
+            </Typography>
+            {activeFields.map((field) => {
+              const errorKey = `extra_values.${field.key}`
+              const value = form.extra_values[field.key]
+              if (field.field_type === 'check') {
+                return (
+                  <FormControlLabel
+                    key={field.id}
+                    control={
+                      <Checkbox
+                        checked={value === true}
+                        disabled={disabled}
+                        onChange={(event) => setExtra(field.key, event.target.checked)}
+                      />
+                    }
+                    label={field.label + (field.is_required ? ' *' : '')}
+                  />
+                )
+              }
+              if (field.field_type === 'multi') {
+                const selectedValues = Array.isArray(value) ? value : []
+                return (
+                  <TextField
+                    key={field.id}
+                    select
+                    SelectProps={{ multiple: true }}
+                    label={field.label}
+                    value={selectedValues}
+                    required={field.is_required}
+                    fullWidth
+                    disabled={disabled}
+                    error={Boolean(fieldErrors[errorKey])}
+                    helperText={fieldErrors[errorKey]}
+                    onChange={(event) => {
+                      const next = event.target.value
+                      setExtra(field.key, typeof next === 'string' ? next.split(',') : next)
+                    }}
+                  >
+                    {(field.options ?? []).map((option) => (
+                      <MenuItem key={option} value={option}>
+                        {option}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                )
+              }
+              if (OPTION_TYPES.has(field.field_type) || field.field_type === 'radio') {
+                return (
+                  <TextField
+                    key={field.id}
+                    select
+                    label={field.label}
+                    value={typeof value === 'string' ? value : ''}
+                    required={field.is_required}
+                    fullWidth
+                    disabled={disabled}
+                    error={Boolean(fieldErrors[errorKey])}
+                    helperText={fieldErrors[errorKey]}
+                    onChange={(event) => setExtra(field.key, event.target.value)}
+                  >
+                    {(field.options ?? []).map((option) => (
+                      <MenuItem key={option} value={option}>
+                        {option}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                )
+              }
+              return (
+                <TextField
+                  key={field.id}
+                  label={field.label}
+                  value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''}
+                  required={field.is_required}
+                  fullWidth
+                  disabled={disabled}
+                  multiline={field.field_type === 'area'}
+                  minRows={field.field_type === 'area' ? 2 : undefined}
+                  type={
+                    field.field_type === 'number'
+                      ? 'number'
+                      : field.field_type === 'email'
+                        ? 'email'
+                        : field.field_type === 'date'
+                          ? 'date'
+                          : field.field_type === 'url'
+                            ? 'url'
+                            : 'text'
+                  }
+                  InputLabelProps={field.field_type === 'date' ? { shrink: true } : undefined}
+                  error={Boolean(fieldErrors[errorKey])}
+                  helperText={fieldErrors[errorKey]}
+                  onChange={(event) => setExtra(field.key, event.target.value)}
+                />
+              )
+            })}
+          </Stack>
+        ) : null}
       </Stack>
     )
   }
@@ -570,6 +770,9 @@ export function LeadsPage() {
                 <TableCell>Priority</TableCell>
                 <TableCell>Follow-up</TableCell>
                 <TableCell>Source</TableCell>
+                {listFields.map((field) => (
+                  <TableCell key={field.id}>{field.label}</TableCell>
+                ))}
                 <TableCell align="right"> </TableCell>
               </TableRow>
             </TableHead>
@@ -579,7 +782,7 @@ export function LeadsPage() {
                   key={lead.id}
                   hover
                   sx={{ cursor: canUpdate || isOwner ? 'pointer' : 'default' }}
-                  onClick={() => openEdit(lead)}
+                  onClick={() => void openEdit(lead)}
                 >
                   <TableCell>
                     <Typography fontWeight={600}>{lead.full_name}</Typography>
@@ -598,8 +801,13 @@ export function LeadsPage() {
                   </TableCell>
                   <TableCell>{formatDueLabel(lead.next_followup_at)}</TableCell>
                   <TableCell>{lead.lead_source || '—'}</TableCell>
+                  {listFields.map((field) => (
+                    <TableCell key={field.id}>
+                      {formatExtraDisplay(lead.extra_values?.[field.key])}
+                    </TableCell>
+                  ))}
                   <TableCell align="right" onClick={(event) => event.stopPropagation()}>
-                    <Button size="small" onClick={() => openEdit(lead)}>
+                    <Button size="small" onClick={() => void openEdit(lead)}>
                       Open
                     </Button>
                   </TableCell>

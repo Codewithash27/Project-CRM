@@ -2,6 +2,7 @@
 
 from app.audit.models import AuditLog
 from app.auth.models import PasswordResetToken, RefreshToken
+from app.lead_fields.models import LeadField
 from app.leads.models import Lead
 from app.organization.models import Company, Project, ProjectMember, Team
 from app.permissions.models import Permission, RolePermission
@@ -12,6 +13,7 @@ __all__ = [
     "AuditLog",
     "Company",
     "Lead",
+    "LeadField",
     "Project",
     "ProjectMember",
     "PasswordResetToken",
