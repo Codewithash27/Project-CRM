@@ -4,6 +4,7 @@ import { GuestRoute, PermissionRoute, ProtectedRoute } from '../../access/compon
 import { AccessDeniedPage } from '../../access/pages/AccessDeniedPage'
 import { AccessManagementPage } from '../../access/pages/AccessManagementPage'
 import { HomePage } from '../../access/pages/HomePage'
+import { ProjectsPage } from '../../projects/pages/ProjectsPage'
 import { ForgotPasswordPage } from '../../auth/pages/ForgotPasswordPage'
 import { LoginPage } from '../../auth/pages/LoginPage'
 import { RegisterPage } from '../../auth/pages/RegisterPage'
@@ -37,7 +38,8 @@ export function AppRoutes() {
       <Route path="/app" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route index element={<HomePage />} />
         <Route path="access-denied" element={<AccessDeniedPage />} />
-        {NAV_ITEMS.filter((item) => item.id !== 'home' && item.id !== 'users').map((item) => (
+        <Route path="projects" element={<ProjectsPage />} />
+        {NAV_ITEMS.filter((item) => item.id !== 'home' && item.id !== 'users' && item.id !== 'projects').map((item) => (
           <Route key={item.id} path={item.path.replace('/app/', '')} element={<NavPlaceholder id={item.id} />} />
         ))}
         <Route

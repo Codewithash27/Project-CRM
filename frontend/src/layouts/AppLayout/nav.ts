@@ -46,7 +46,7 @@ export type NavItem = {
 export const NAV_ITEMS: readonly NavItem[] = [
   { id: 'businesses', path: '/app/businesses', section: 'menu', roles: SUPER_ADMIN, icon: DomainOutlinedIcon },
   { id: 'home', path: '/app', section: 'menu', roles: OWNER, icon: HomeOutlinedIcon },
-  { id: 'projects', path: '/app/projects', section: 'menu', roles: [...SUPER_ADMIN, ...OWNER], icon: WorkOutlineOutlinedIcon },
+  { id: 'projects', path: '/app/projects', section: 'menu', roles: [...SUPER_ADMIN, ...OWNER], ready: true, icon: WorkOutlineOutlinedIcon },
   {
     id: 'users',
     path: '/app/admin/access',

@@ -1,0 +1,337 @@
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
+  useMediaQuery,
+} from '@mui/material'
+import { useTheme } from '@mui/material/styles'
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+
+import { ErrorAlert } from '../../components/common/ErrorAlert'
+import { LoadingScreen } from '../../components/common/LoadingScreen'
+import { ApiError } from '../../services/api/errors'
+import { api } from '../../services/api/client'
+
+type TemplateId = 'GENERIC' | 'HIRING' | 'PANEERWALA' | 'PRESCHOOL' | 'SPACE-VIEW'
+
+interface CompanyOption {
+  id: string
+  name: string
+  status: string
+}
+
+interface ProjectItem {
+  id: string
+  company_id: string
+  company_name: string
+  name: string
+  code: string
+  template: string
+  description: string
+  status: string
+  lead_count: number
+  next_lead_number: string
+}
+
+interface ProjectList {
+  can_create: boolean
+  companies: CompanyOption[]
+  items: ProjectItem[]
+}
+
+const TEMPLATES: { id: TemplateId; label: string; detail: string }[] = [
+  { id: 'GENERIC', label: 'Generic', detail: 'Basic fields and Expected Value.' },
+  { id: 'HIRING', label: 'Hiring', detail: 'Recruitment stage and outcome.' },
+  { id: 'PANEERWALA', label: 'Paneerwala', detail: 'Expected Value and Order Amount.' },
+  { id: 'PRESCHOOL', label: 'Preschool', detail: 'Admission enquiries and Expected Value.' },
+  { id: 'SPACE-VIEW', label: 'Space View', detail: 'Site is required, plus Expected Value.' },
+]
+
+function cleanCode(value: string) {
+  return value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 12)
+}
+
+function codeIsValid(code: string) {
+  return /^[A-Z][A-Z0-9-]{1,11}$/.test(code) && !code.endsWith('-') && !code.includes('--')
+}
+
+export function ProjectsPage() {
+  const theme = useTheme()
+  const phone = useMediaQuery(theme.breakpoints.down('sm'))
+  const [data, setData] = useState<ProjectList | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [code, setCode] = useState('')
+  const [companyId, setCompanyId] = useState('')
+  const [template, setTemplate] = useState<TemplateId>('GENERIC')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+
+  const load = useCallback(async () => {
+    setError('')
+    try {
+      const result = await api.get<ProjectList>('/api/v1/projects')
+      setData(result.data)
+      setCompanyId((current) => current || result.data.companies[0]?.id || '')
+    } catch (requestError) {
+      setError(requestError instanceof ApiError ? requestError.message : 'Something went wrong. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const selectedCompany = data?.companies.find((company) => company.id === companyId)
+  const duplicate = useMemo(
+    () => Boolean(data?.items.some((project) => project.company_id === companyId && project.code === code)),
+    [code, companyId, data?.items],
+  )
+  const preview = codeIsValid(code) ? `${code}-0001` : 'Enter a short code'
+  const chosenTemplate = TEMPLATES.find((item) => item.id === template)
+
+  function closeForm() {
+    if (saving) return
+    setOpen(false)
+    setFieldErrors({})
+  }
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault()
+    const next: Record<string, string> = {}
+    if (name.trim().length < 2) next.name = 'Project name must be at least 2 characters.'
+    if (!codeIsValid(code)) next.code = 'Use 2 to 12 letters, numbers, or hyphens, starting with a letter.'
+    else if (duplicate) next.code = 'This business already has a project with that short code.'
+    if (!companyId) next.company_id = 'Choose a business.'
+    setFieldErrors(next)
+    if (Object.keys(next).length > 0) return
+    setSaving(true)
+    setError('')
+    setNotice('')
+    try {
+      const result = await api.post<ProjectList>('/api/v1/projects', {
+        name: name.trim(),
+        code,
+        company_id: companyId,
+        template,
+      })
+      setData(result.data)
+      setName('')
+      setCode('')
+      setTemplate('GENERIC')
+      setFieldErrors({})
+      setOpen(false)
+      setNotice(result.message)
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.details.length > 0) {
+        const mapped: Record<string, string> = {}
+        for (const detail of requestError.details) mapped[detail.field] = detail.message
+        setFieldErrors(mapped)
+      }
+      setError(requestError instanceof ApiError ? requestError.message : 'Something went wrong. Please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading && !data) return <LoadingScreen />
+
+  return (
+    <Stack spacing={3}>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={2}
+        sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' }, justifyContent: 'space-between' }}
+      >
+        <Stack spacing={0.75} sx={{ minWidth: 0 }}>
+          <Typography variant="h1">Projects</Typography>
+          <Typography color="text.secondary">
+            {data?.can_create
+              ? 'Each project belongs to a business and starts its own lead numbers, such as PRESCHOOL-0001.'
+              : 'Projects given to your business. Each one has its own lead numbers.'}
+          </Typography>
+        </Stack>
+        {data?.can_create ? (
+          <Button variant="contained" onClick={() => setOpen(true)} sx={{ flexShrink: 0 }}>
+            Create project
+          </Button>
+        ) : null}
+      </Stack>
+      {notice ? <Alert severity="success">{notice}</Alert> : null}
+      {error ? <ErrorAlert message={error} /> : null}
+
+      {data && data.items.length === 0 ? (
+        <Typography color="text.secondary">No project yet. The first one you create will appear here.</Typography>
+      ) : null}
+      <Box
+        sx={{
+          display: 'grid',
+          gap: 2,
+          gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: '1fr 1fr 1fr' },
+        }}
+      >
+        {data?.items.map((project) => (
+          <Box
+            key={project.id}
+            sx={{
+              p: { xs: 2, sm: 2.5 },
+              borderRadius: 3,
+              border: '1px solid',
+              borderColor: 'divider',
+              bgcolor: 'background.paper',
+              minWidth: 0,
+            }}
+          >
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 1 }}>
+              <Typography sx={{ fontWeight: 700, minWidth: 0, overflowWrap: 'anywhere' }}>{project.name}</Typography>
+              <Chip size="small" label={project.code} />
+              <Chip
+                size="small"
+                label={project.status === 'active' ? 'Active' : 'Inactive'}
+                color={project.status === 'active' ? 'success' : 'default'}
+                variant="outlined"
+              />
+            </Stack>
+            {data.can_create ? (
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+                {project.company_name}
+              </Typography>
+            ) : null}
+            <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+              {project.description}
+            </Typography>
+            <Typography variant="body2" sx={{ mt: 1.5 }}>
+              {project.lead_count} {project.lead_count === 1 ? 'lead' : 'leads'} · Next {project.next_lead_number}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
+
+      <Dialog
+        open={open}
+        onClose={closeForm}
+        fullScreen={phone}
+        fullWidth
+        maxWidth="sm"
+        aria-labelledby="create-project-title"
+      >
+        <Box component="form" onSubmit={(event) => void onSubmit(event)} sx={{ display: 'flex', flexDirection: 'column', minHeight: phone ? '100%' : undefined }}>
+          <DialogTitle id="create-project-title">Create project</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 0.5 }}>
+              <TextField
+                id="project-name"
+                label="Project name"
+                value={name}
+                required
+                fullWidth
+                autoFocus
+                placeholder="Preschool"
+                error={Boolean(fieldErrors.name)}
+                helperText={fieldErrors.name}
+                disabled={saving}
+                onChange={(event) => setName(event.target.value)}
+              />
+              <TextField
+                id="project-code"
+                label="Short code"
+                value={code}
+                required
+                fullWidth
+                placeholder="PRESCHOOL"
+                error={Boolean(fieldErrors.code)}
+                helperText={fieldErrors.code || 'Used in the lead number. Letters, numbers, and hyphens.'}
+                disabled={saving}
+                slotProps={{ htmlInput: { maxLength: 12, style: { textTransform: 'uppercase' } } }}
+                onChange={(event) => setCode(cleanCode(event.target.value))}
+              />
+              <TextField
+                id="project-business"
+                select
+                label="Business"
+                value={companyId}
+                required
+                fullWidth
+                error={Boolean(fieldErrors.company_id)}
+                helperText={fieldErrors.company_id}
+                disabled={saving || !data || data.companies.length === 0}
+                onChange={(event) => setCompanyId(event.target.value)}
+              >
+                {(data?.companies ?? []).map((company) => (
+                  <MenuItem key={company.id} value={company.id}>
+                    {company.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  Template
+                </Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1 }}>
+                  {TEMPLATES.map((item) => {
+                    const selected = template === item.id
+                    return (
+                      <Button
+                        key={item.id}
+                        type="button"
+                        variant={selected ? 'contained' : 'outlined'}
+                        aria-pressed={selected}
+                        disabled={saving}
+                        onClick={() => setTemplate(item.id)}
+                        sx={{ justifyContent: 'flex-start', textAlign: 'left', py: 1.25, px: 1.5, height: 'auto', whiteSpace: 'normal' }}
+                      >
+                        <Stack spacing={0.25} sx={{ alignItems: 'flex-start', minWidth: 0 }}>
+                          <Typography sx={{ fontWeight: 700, color: 'inherit' }}>{item.label}</Typography>
+                          <Typography variant="caption" sx={{ color: selected ? 'inherit' : 'text.secondary', textAlign: 'left' }}>
+                            {item.detail}
+                          </Typography>
+                        </Stack>
+                      </Button>
+                    )
+                  })}
+                </Box>
+              </Box>
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'background.default' }}>
+                <Typography sx={{ fontWeight: 700, mb: 0.75 }}>What this creates</Typography>
+                <Typography>
+                  First lead number: <b>{preview}</b>
+                </Typography>
+                <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+                  {selectedCompany ? selectedCompany.name : 'Choose a business.'} · {chosenTemplate?.label}
+                </Typography>
+                <Typography color="text.secondary">{chosenTemplate?.detail}</Typography>
+                {duplicate ? (
+                  <Typography color="error" sx={{ mt: 0.75 }}>
+                    This business already has a project with that short code.
+                  </Typography>
+                ) : null}
+              </Box>
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2, flexDirection: { xs: 'column-reverse', sm: 'row' }, gap: 1 }}>
+            <Button type="button" onClick={closeForm} disabled={saving} fullWidth={phone}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="contained" disabled={saving || !data || data.companies.length === 0} fullWidth={phone}>
+              {saving ? 'Creating…' : 'Create project'}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+    </Stack>
+  )
+}
