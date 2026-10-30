@@ -5,6 +5,9 @@ export interface UserProfile {
   preferred_language: string
   is_active: boolean
   email_verified: boolean
+  company_id: string | null
+  team_id: string | null
+  manager_id: string | null
   roles: string[]
   permissions: string[]
 }
@@ -38,6 +41,9 @@ export interface AccessUser {
   email: string
   roles: string[]
   is_active: boolean
+  company_id: string | null
+  team_id: string | null
+  manager_id: string | null
 }
 
 export interface UserListData {

@@ -79,7 +79,8 @@ def password_policy() -> ApiResponse[PasswordPolicyData]:
     response_model=ApiResponse[RegisteredUser],
     summary="Register a salesperson account",
     description=(
-        "Creates an active salesperson account. The role is assigned by the server. "
+        "Creates an inactive salesperson account. An administrator must approve it before sign-in. "
+        "The role is assigned by the server. "
         "Clients cannot choose Super Admin, Business Owner, or Marketing during registration." + _CSRF_NOTE
     ),
     responses=error_responses(403, 409, 422, 429),
@@ -92,7 +93,7 @@ def register(
     user = register_user(db, payload)
     return ApiResponse(
         data=to_registered_user(user),
-        message="Registration successful. Please sign in.",
+        message="Registration received. An administrator must approve this account before you can sign in.",
     )
 
 

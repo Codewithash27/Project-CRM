@@ -2,6 +2,7 @@
 
 from typing import Literal
 
+from email_validator import EmailNotValidError, validate_email
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 SUPPORTED_LANGUAGES = ("en", "mr", "hi")
@@ -9,6 +10,22 @@ SUPPORTED_LANGUAGES = ("en", "mr", "hi")
 
 def normalize_email(value: str) -> str:
     return value.strip().lower()
+
+
+def validated_login_email(value: object) -> str:
+    """Accept a normal address, including the reserved .test domains used by demo accounts."""
+    if not isinstance(value, str):
+        raise ValueError("Enter a valid email address.")
+    normalized = normalize_email(value)
+    try:
+        parsed = validate_email(
+            normalized,
+            check_deliverability=False,
+            test_environment=normalized.endswith(".test"),
+        )
+    except EmailNotValidError as exc:
+        raise ValueError("Enter a valid email address.") from exc
+    return parsed.normalized.lower()
 
 
 class RegisterRequest(BaseModel):
@@ -41,16 +58,14 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    email: EmailStr
+    email: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=1, max_length=128)
     remember_me: bool = False
 
     @field_validator("email", mode="before")
     @classmethod
-    def lowercase_email(cls, value: object) -> object:
-        if isinstance(value, str):
-            return normalize_email(value)
-        return value
+    def lowercase_email(cls, value: object) -> str:
+        return validated_login_email(value)
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -89,5 +104,8 @@ class UserProfile(BaseModel):
     preferred_language: str
     is_active: bool
     email_verified: bool
+    company_id: str | None
+    team_id: str | None
+    manager_id: str | None
     roles: list[str]
     permissions: list[str]

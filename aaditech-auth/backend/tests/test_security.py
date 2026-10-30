@@ -70,6 +70,7 @@ def test_openapi_documents_auth_and_access_routes():
         "/api/v1/auth/forgot-password",
         "/api/v1/auth/reset-password",
         "/api/v1/users",
+        "/api/v1/users/{user_id}",
         "/api/v1/users/{user_id}/role",
         "/api/v1/users/{user_id}/status",
         "/api/v1/roles",

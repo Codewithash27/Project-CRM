@@ -12,6 +12,8 @@ import { LoadingScreen } from '../../components/common/LoadingScreen'
 import { NotFoundPage } from '../../components/common/NotFoundPage'
 import { AppLayout } from '../../layouts/AppLayout/AppLayout'
 import { AuthLayout } from '../../layouts/AuthLayout/AuthLayout'
+import { NAV_ITEMS } from '../../layouts/AppLayout/nav'
+import { NavPlaceholder } from '../../layouts/AppLayout/NavPlaceholder'
 import { useAuth } from '../../store/auth-context'
 
 function RootRedirect() {
@@ -35,6 +37,9 @@ export function AppRoutes() {
       <Route path="/app" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route index element={<HomePage />} />
         <Route path="access-denied" element={<AccessDeniedPage />} />
+        {NAV_ITEMS.filter((item) => item.id !== 'home' && item.id !== 'users').map((item) => (
+          <Route key={item.id} path={item.path.replace('/app/', '')} element={<NavPlaceholder id={item.id} />} />
+        ))}
         <Route
           path="admin/access"
           element={
