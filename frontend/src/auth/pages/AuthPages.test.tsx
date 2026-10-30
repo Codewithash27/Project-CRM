@@ -39,7 +39,7 @@ function renderPage(ui: ReactNode, path = '/login') {
   render(
     <ThemeProvider theme={theme}>
       <AuthContext.Provider
-        value={{ status: 'unauthenticated', user: null, login, register, logout: vi.fn() }}
+        value={{ status: 'unauthenticated', user: null, login, register, logout: vi.fn(), refreshUser: vi.fn() }}
       >
         <MemoryRouter initialEntries={[path]}>{ui}</MemoryRouter>
       </AuthContext.Provider>
@@ -113,7 +113,14 @@ describe('authentication forms', () => {
     render(
       <ThemeProvider theme={theme}>
         <AuthContext.Provider
-          value={{ status: 'unauthenticated', user: null, login: vi.fn(), register: vi.fn(), logout: vi.fn() }}
+          value={{
+            status: 'unauthenticated',
+            user: null,
+            login: vi.fn(),
+            register: vi.fn(),
+            logout: vi.fn(),
+            refreshUser: vi.fn(),
+          }}
         >
           <MemoryRouter initialEntries={['/login']}>
             <Routes>

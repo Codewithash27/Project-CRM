@@ -16,7 +16,7 @@ from app.common.exceptions import AppError, ErrorCode
 from app.core.logging import log_event
 from app.core.password_policy import password_rule_failures
 from app.core.security import hash_password
-from app.organization.models import Company, Team
+from app.organization.models import ACTIVE, Company, Team
 from app.permissions.service import get_permission_keys
 from app.roles.models import Role, UserRole
 from app.roles.service import RoleName, get_role_by_name
@@ -47,6 +47,18 @@ def list_users(
     total = int(db.scalar(select(func.count()).select_from(User).where(*filters)) or 0)
     stmt = select(User).where(*filters).order_by(User.full_name, User.email).limit(limit).offset(offset)
     return list(db.scalars(stmt).all()), total
+
+
+def company_names_for_users(db: Session, users: list[User]) -> dict[uuid.UUID, str]:
+    ids = {user.company_id for user in users if user.company_id is not None}
+    if not ids:
+        return {}
+    rows = db.scalars(select(Company).where(Company.id.in_(ids))).all()
+    return {company.id: company.name for company in rows}
+
+
+def list_active_companies(db: Session) -> list[Company]:
+    return list(db.scalars(select(Company).where(Company.status == ACTIVE).order_by(Company.name)).all())
 
 
 def is_platform_admin(user: User) -> bool:

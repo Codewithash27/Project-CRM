@@ -42,13 +42,22 @@ export interface AccessUser {
   roles: string[]
   is_active: boolean
   company_id: string | null
+  company_name: string | null
   team_id: string | null
   manager_id: string | null
+}
+
+export interface CompanyOption {
+  id: string
+  name: string
+  status: string
 }
 
 export interface UserListData {
   items: AccessUser[]
   total: number
+  can_create: boolean
+  companies: CompanyOption[]
 }
 
 export interface PermissionPublic {
@@ -62,4 +71,5 @@ export interface RolePublic {
   name: string
   description: string
   permissions: PermissionPublic[]
+  is_system?: boolean
 }

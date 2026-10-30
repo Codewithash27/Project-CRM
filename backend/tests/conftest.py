@@ -80,6 +80,13 @@ def clean_database() -> None:
                 "user_roles, project_members, leads, projects, users, teams, companies CASCADE"
             )
         )
+        connection.execute(
+            text(
+                "DELETE FROM roles WHERE name NOT IN "
+                "('SUPER_ADMIN', 'BUSINESS_OWNER', 'MARKETING', 'SALESPERSON', "
+                "'ADMIN', 'SALES_MANAGER', 'SALES_REP', 'VIEWER')"
+            )
+        )
     engine.dispose()
     from app.core.rate_limit import limiter
     from app.email.sender import get_memory_sender

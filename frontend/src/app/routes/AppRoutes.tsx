@@ -2,9 +2,10 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { GuestRoute, PermissionRoute, ProtectedRoute } from '../../access/components/RouteGuards'
 import { AccessDeniedPage } from '../../access/pages/AccessDeniedPage'
-import { AccessManagementPage } from '../../access/pages/AccessManagementPage'
 import { HomePage } from '../../access/pages/HomePage'
 import { ProjectsPage } from '../../projects/pages/ProjectsPage'
+import { RolesPage } from '../../roles/pages/RolesPage'
+import { UsersPage } from '../../users/pages/UsersPage'
 import { ForgotPasswordPage } from '../../auth/pages/ForgotPasswordPage'
 import { LoginPage } from '../../auth/pages/LoginPage'
 import { RegisterPage } from '../../auth/pages/RegisterPage'
@@ -39,17 +40,28 @@ export function AppRoutes() {
         <Route index element={<HomePage />} />
         <Route path="access-denied" element={<AccessDeniedPage />} />
         <Route path="projects" element={<ProjectsPage />} />
-        {NAV_ITEMS.filter((item) => item.id !== 'home' && item.id !== 'users' && item.id !== 'projects').map((item) => (
-          <Route key={item.id} path={item.path.replace('/app/', '')} element={<NavPlaceholder id={item.id} />} />
-        ))}
         <Route
-          path="admin/access"
+          path="users"
           element={
             <PermissionRoute permission="users.read">
-              <AccessManagementPage />
+              <UsersPage />
             </PermissionRoute>
           }
         />
+        <Route
+          path="roles"
+          element={
+            <PermissionRoute permission="roles.read">
+              <RolesPage />
+            </PermissionRoute>
+          }
+        />
+        <Route path="admin/access" element={<Navigate to="/app/users" replace />} />
+        {NAV_ITEMS.filter(
+          (item) => item.id !== 'home' && item.id !== 'users' && item.id !== 'roles' && item.id !== 'projects',
+        ).map((item) => (
+          <Route key={item.id} path={item.path.replace('/app/', '')} element={<NavPlaceholder id={item.id} />} />
+        ))}
       </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

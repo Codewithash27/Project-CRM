@@ -47,7 +47,7 @@ function renderRoute(path: string, user: UserProfile | null, status: 'authentica
   return render(
     <ThemeProvider theme={theme}>
       <AuthContext.Provider
-        value={{ status, user, login: vi.fn(), register: vi.fn(), logout: vi.fn() }}
+        value={{ status, user, login: vi.fn(), register: vi.fn(), logout: vi.fn(), refreshUser: vi.fn() }}
       >
         <MemoryRouter initialEntries={[path]}>
           <Routes>

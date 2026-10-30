@@ -8,10 +8,12 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import client_ip, require_admin_permission, require_permission
 from app.common.responses import ApiResponse, error_responses
 from app.core.database import get_db
+from app.permissions.service import get_permission_keys
 from app.users.models import User
 from app.users.schemas import (
     AccessUser,
     AssignRoleRequest,
+    CompanyOption,
     CreateUserRequest,
     UpdateManagedUserRequest,
     UpdateStatusRequest,
@@ -20,15 +22,24 @@ from app.users.schemas import (
 )
 from app.users.service import (
     change_user_role,
+    company_names_for_users,
     create_managed_user,
     deactivate_managed_user,
     is_platform_admin,
+    list_active_companies,
     list_users,
     set_user_active,
     update_managed_user,
 )
 
 router = APIRouter()
+
+
+def _access_user(db: Session, user: User) -> AccessUser:
+    name = None
+    if user.company_id is not None:
+        name = company_names_for_users(db, [user]).get(user.company_id)
+    return to_access_user(user, name)
 
 
 @router.get(
@@ -55,8 +66,29 @@ def get_users(
         company_id=actor.company_id,
         company_scoped=not is_platform_admin(actor),
     )
+    names = company_names_for_users(db, users)
+    can_create = "users.create" in get_permission_keys(db, actor.id)
+    companies: list[CompanyOption] = []
+    if can_create and is_platform_admin(actor):
+        companies = [
+            CompanyOption(id=str(company.id), name=company.name, status=company.status)
+            for company in list_active_companies(db)
+        ]
+    elif can_create and actor.company_id is not None:
+        for company in list_active_companies(db):
+            if company.id == actor.company_id:
+                companies = [CompanyOption(id=str(company.id), name=company.name, status=company.status)]
+                break
     return ApiResponse(
-        data=UserListData(items=[to_access_user(user) for user in users], total=total),
+        data=UserListData(
+            items=[
+                to_access_user(user, names.get(user.company_id) if user.company_id else None)
+                for user in users
+            ],
+            total=total,
+            can_create=can_create,
+            companies=companies,
+        ),
         message="Success",
     )
 
@@ -85,7 +117,7 @@ def assign_role(
         role_name=payload.role,
         ip_address=client_ip(request),
     )
-    return ApiResponse(data=to_access_user(updated), message="Role updated.")
+    return ApiResponse(data=_access_user(db, updated), message="Role updated.")
 
 
 @router.patch(
@@ -112,7 +144,7 @@ def update_status(
         is_active=payload.is_active,
         ip_address=client_ip(request),
     )
-    return ApiResponse(data=to_access_user(updated), message="User updated.")
+    return ApiResponse(data=_access_user(db, updated), message="User updated.")
 
 
 @router.post(
@@ -134,7 +166,7 @@ def create_user(
     db: Session = Depends(get_db),
 ) -> ApiResponse[AccessUser]:
     created = create_managed_user(db, actor=actor, payload=payload, ip_address=client_ip(request))
-    return ApiResponse(data=to_access_user(created), message="User created.")
+    return ApiResponse(data=_access_user(db, created), message="User created.")
 
 
 @router.patch(
@@ -162,7 +194,7 @@ def update_user(
         payload=payload,
         ip_address=client_ip(request),
     )
-    return ApiResponse(data=to_access_user(updated), message="User updated.")
+    return ApiResponse(data=_access_user(db, updated), message="User updated.")
 
 
 @router.delete(
@@ -187,4 +219,4 @@ def delete_user(
         target_id=user_id,
         ip_address=client_ip(request),
     )
-    return ApiResponse(data=to_access_user(updated), message="User deactivated.")
+    return ApiResponse(data=_access_user(db, updated), message="User deactivated.")

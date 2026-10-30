@@ -28,6 +28,7 @@ class Role(Base):
     user_roles: Mapped[list["UserRole"]] = relationship(back_populates="role")
     role_permissions: Mapped[list["RolePermission"]] = relationship(
         back_populates="role",
+        cascade="all, delete-orphan",
         lazy="selectin",
     )
 

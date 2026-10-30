@@ -36,7 +36,16 @@ function profile(roles: string[], permissions: string[] = ['features.read']): Us
 function renderShell(user: UserProfile, path = '/app') {
   return render(
     <ThemeProvider theme={theme}>
-      <AuthContext.Provider value={{ status: 'authenticated', user, login: vi.fn(), register: vi.fn(), logout: vi.fn() }}>
+      <AuthContext.Provider
+        value={{
+          status: 'authenticated',
+          user,
+          login: vi.fn(),
+          register: vi.fn(),
+          logout: vi.fn(),
+          refreshUser: vi.fn(),
+        }}
+      >
         <MemoryRouter initialEntries={[path]}>
           <Routes>
             <Route path="/app" element={<AppLayout />}>

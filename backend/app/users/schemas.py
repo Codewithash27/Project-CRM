@@ -18,13 +18,22 @@ class AccessUser(BaseModel):
     roles: list[str]
     is_active: bool
     company_id: str | None
+    company_name: str | None
     team_id: str | None
     manager_id: str | None
+
+
+class CompanyOption(BaseModel):
+    id: str
+    name: str
+    status: str
 
 
 class UserListData(BaseModel):
     items: list[AccessUser]
     total: int
+    can_create: bool = False
+    companies: list[CompanyOption] = []
 
 
 class AssignRoleRequest(BaseModel):
@@ -115,7 +124,7 @@ def to_user_profile(db: Session, user: User) -> UserProfile:
     )
 
 
-def to_access_user(user: User) -> AccessUser:
+def to_access_user(user: User, company_name: str | None = None) -> AccessUser:
     return AccessUser(
         id=str(user.id),
         full_name=user.full_name,
@@ -123,6 +132,7 @@ def to_access_user(user: User) -> AccessUser:
         roles=role_names(user),
         is_active=user.is_active,
         company_id=_optional_id(user.company_id),
+        company_name=company_name,
         team_id=_optional_id(user.team_id),
         manager_id=_optional_id(user.manager_id),
     )
