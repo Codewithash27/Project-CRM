@@ -13,10 +13,9 @@ export function PlaceholderPage({ item }: { item: NavItem }) {
         label={t('comingSoon')}
         sx={{
           alignSelf: 'flex-start',
-          bgcolor: 'rgba(169, 120, 58, 0.12)',
-          color: '#7A5420',
-          fontWeight: 650,
-          letterSpacing: '0.04em',
+          bgcolor: '#e0e7ff',
+          color: '#3730a3',
+          fontWeight: 500,
         }}
       />
       <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-start' }}>
@@ -29,7 +28,7 @@ export function PlaceholderPage({ item }: { item: NavItem }) {
             placeItems: 'center',
             flexShrink: 0,
             color: 'primary.main',
-            bgcolor: 'rgba(20, 50, 79, 0.06)',
+            bgcolor: '#eff6ff',
             border: '1px solid',
             borderColor: 'divider',
           }}

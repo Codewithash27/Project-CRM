@@ -5,8 +5,6 @@ import i18n, { supportedLanguages, type SupportedLanguage } from '../../i18n'
 
 const labels: Record<SupportedLanguage, string> = {
   en: 'english',
-  mr: 'marathi',
-  hi: 'hindi',
 }
 
 export function LanguageSelect() {

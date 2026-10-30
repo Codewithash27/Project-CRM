@@ -49,24 +49,24 @@ function NavButton({
       aria-label={label}
       onClick={onNavigate}
       sx={{
-        minHeight: 44,
-        borderRadius: 2,
+        minHeight: 40,
+        borderRadius: 999,
         mb: 0.25,
         px: collapsed ? 1.25 : 1.5,
         justifyContent: collapsed ? 'center' : 'flex-start',
-        color: active ? '#F6E7C8' : 'rgba(244, 240, 232, 0.78)',
+        color: active ? '#ffffff' : '#cbd5e1',
         '&.Mui-selected': {
-          bgcolor: 'rgba(169, 120, 58, 0.18)',
-          color: '#F6E7C8',
+          bgcolor: 'rgba(255,255,255,0.14)',
+          color: '#ffffff',
         },
-        '&.Mui-selected:hover': { bgcolor: 'rgba(169, 120, 58, 0.26)' },
-        '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.06)' },
+        '&.Mui-selected:hover': { bgcolor: 'rgba(255,255,255,0.18)' },
+        '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.08)' },
       }}
     >
       <ListItemIcon
         sx={{
           minWidth: collapsed ? 0 : 36,
-          color: active ? '#E4C48A' : 'rgba(244, 240, 232, 0.62)',
+          color: 'inherit',
           justifyContent: 'center',
         }}
       >
@@ -75,7 +75,7 @@ function NavButton({
       {collapsed ? null : (
         <ListItemText
           primary={label}
-          slotProps={{ primary: { sx: { fontWeight: active ? 650 : 500, fontSize: '0.94rem' } } }}
+          slotProps={{ primary: { sx: { fontWeight: active ? 600 : 500, fontSize: '0.875rem' } } }}
         />
       )}
     </ListItemButton>
@@ -109,21 +109,21 @@ export function SidebarNav({
 
   return (
     <Stack sx={{ height: '100%' }}>
-      <Stack direction="row" alignItems="center" spacing={1.25} sx={{ px: collapsed ? 1.25 : 2, minHeight: 76 }}>
+      <Stack direction="row" alignItems="center" spacing={1.25} sx={{ px: collapsed ? 1.25 : 1.5, minHeight: 64 }}>
         <Box
           aria-hidden
           sx={{
-            width: 40,
-            height: 40,
-            borderRadius: 2,
+            width: 38,
+            height: 38,
+            borderRadius: '11px',
             flexShrink: 0,
             display: 'grid',
             placeItems: 'center',
-            bgcolor: '#C5923E',
-            color: '#1C1408',
-            fontFamily: '"Fraunces", "Noto Sans Devanagari", Georgia, serif',
-            fontWeight: 650,
-            fontSize: '1.25rem',
+            bgcolor: 'rgba(255,255,255,0.18)',
+            color: '#ffffff',
+            border: '1px solid rgba(255,255,255,0.3)',
+            fontWeight: 600,
+            fontSize: '1rem',
           }}
         >
           A
@@ -138,17 +138,12 @@ export function SidebarNav({
                 display: 'block',
                 color: 'inherit',
                 textDecoration: 'none',
-                fontFamily: '"Fraunces", "Noto Sans Devanagari", Georgia, serif',
-                fontWeight: 560,
-                fontSize: '1.25rem',
-                letterSpacing: '-0.03em',
-                lineHeight: 1.1,
+                fontWeight: 600,
+                fontSize: '0.95rem',
+                lineHeight: 1.15,
               }}
             >
-              {t('navigation:brand')}
-            </Typography>
-            <Typography variant="caption" sx={{ color: 'rgba(244,240,232,0.55)', letterSpacing: '0.16em' }}>
-              {t('navigation:product')}
+              {t('navigation:brand')} {t('navigation:product')}
             </Typography>
           </Box>
         )}
@@ -156,7 +151,7 @@ export function SidebarNav({
           <IconButton
             aria-label={collapsed ? t('navigation:expandSidebar') : t('navigation:collapseSidebar')}
             onClick={onToggleCollapse}
-            sx={{ color: 'rgba(244,240,232,0.8)' }}
+            sx={{ color: '#cbd5e1' }}
           >
             {collapsed ? <MenuOutlinedIcon /> : <MenuOpenOutlinedIcon />}
           </IconButton>
@@ -178,9 +173,9 @@ export function SidebarNav({
                     px: 1.5,
                     pt: 1.25,
                     pb: 0.75,
-                    color: 'rgba(244,240,232,0.42)',
-                    letterSpacing: '0.14em',
-                    fontWeight: 650,
+                    color: '#94a3b8',
+                    letterSpacing: '0.04em',
+                    fontWeight: 500,
                   }}
                 >
                   {t(`navigation:sections.${section}`)}
@@ -209,20 +204,20 @@ export function SidebarNav({
             sx={{
               width: 36,
               height: 36,
-              bgcolor: '#C5923E',
-              color: '#1C1408',
-              fontSize: '0.8rem',
-              fontWeight: 700,
+              bgcolor: '#e0e7ff',
+              color: '#3730a3',
+              fontSize: '0.75rem',
+              fontWeight: 600,
             }}
           >
             {initials(user?.full_name ?? '')}
           </Avatar>
           {collapsed ? null : (
             <Box sx={{ minWidth: 0 }}>
-              <Typography noWrap sx={{ fontWeight: 650, fontSize: '0.92rem' }}>
+              <Typography noWrap sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
                 {user?.full_name}
               </Typography>
-              <Typography noWrap variant="caption" sx={{ color: 'rgba(244,240,232,0.55)' }}>
+              <Typography noWrap variant="caption" sx={{ color: '#94a3b8' }}>
                 {leadRole ? roleLabel(leadRole, t) : roleNames}
               </Typography>
             </Box>

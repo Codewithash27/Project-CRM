@@ -1,4 +1,4 @@
-import { Button, MenuItem, Stack, TextField, Typography, Link as MuiLink } from '@mui/material'
+import { Button, Stack, TextField, Typography, Link as MuiLink } from '@mui/material'
 import { FormEvent, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
@@ -8,7 +8,6 @@ import { usePasswordPolicy } from '../hooks/usePasswordPolicy'
 import { fieldMessages, messageForError } from '../validation/errors'
 import { isEmail, validatePassword } from '../validation/password'
 import { ErrorAlert } from '../../components/common/ErrorAlert'
-import i18n, { supportedLanguages, type SupportedLanguage } from '../../i18n'
 import { ApiError } from '../../services/api/errors'
 import { useAuth } from '../../store/auth-context'
 
@@ -17,14 +16,10 @@ export function RegisterPage() {
   const { register } = useAuth()
   const navigate = useNavigate()
   const { policy, error: policyError } = usePasswordPolicy()
-  const initialLanguage = supportedLanguages.includes((i18n.language ?? 'en') as SupportedLanguage)
-    ? ((i18n.language.split('-')[0] ?? 'en') as SupportedLanguage)
-    : 'en'
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [language, setLanguage] = useState<SupportedLanguage>(initialLanguage)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -53,9 +48,8 @@ export function RegisterPage() {
         email: email.trim(),
         password,
         confirm_password: confirmPassword,
-        preferred_language: language,
+        preferred_language: 'en',
       })
-      void i18n.changeLanguage(language)
       navigate('/login', { replace: true, state: { notice: t('auth:registrationSuccess') } })
     } catch (error) {
       if (error instanceof ApiError && error.details.length > 0) {
@@ -119,19 +113,6 @@ export function RegisterPage() {
         disabled={submitting || !policy}
         onChange={setConfirmPassword}
       />
-      <TextField
-        select
-        id="preferred_language"
-        label={t('auth:preferredLanguage')}
-        value={language}
-        fullWidth
-        disabled={submitting}
-        onChange={(event) => setLanguage(event.target.value as SupportedLanguage)}
-      >
-        <MenuItem value="en">{t('common:english')}</MenuItem>
-        <MenuItem value="mr">{t('common:marathi')}</MenuItem>
-        <MenuItem value="hi">{t('common:hindi')}</MenuItem>
-      </TextField>
       <Button type="submit" variant="contained" disabled={submitting || !policy}>
         {submitting ? t('auth:submitting') : t('auth:createAccount')}
       </Button>

@@ -109,8 +109,7 @@ describe('authentication forms', () => {
     expect(api.post).not.toHaveBeenCalled()
   })
 
-  it('switches the login screen to Marathi', async () => {
-    const user = userEvent.setup()
+  it('shows the English sign-in screen', () => {
     render(
       <ThemeProvider theme={theme}>
         <AuthContext.Provider
@@ -126,7 +125,8 @@ describe('authentication forms', () => {
         </AuthContext.Provider>
       </ThemeProvider>,
     )
-    await user.selectOptions(screen.getByLabelText(/language/i), 'mr')
-    expect(await screen.findByRole('button', { name: 'प्रवेश करा' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /one clear pipeline/i })).toBeInTheDocument()
+    expect(screen.queryByLabelText(/language/i)).not.toBeInTheDocument()
   })
 })

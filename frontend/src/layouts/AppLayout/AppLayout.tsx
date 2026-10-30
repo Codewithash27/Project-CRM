@@ -24,8 +24,8 @@ import { useAuth } from '../../store/auth-context'
 import { SidebarNav } from './SidebarNav'
 import { isNavActive, primaryRole, visibleNav } from './nav'
 
-const EXPANDED = 280
-const COLLAPSED = 84
+const EXPANDED = 220
+const COLLAPSED = 76
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -58,9 +58,9 @@ export function AppLayout() {
   const drawerPaper = {
     width: sidebarWidth,
     boxSizing: 'border-box' as const,
-    color: '#F4F0E8',
-    borderRight: '1px solid rgba(255,255,255,0.06)',
-    background: 'linear-gradient(180deg, #16202B 0%, #101820 48%, #0C1218 100%)',
+    color: '#ffffff',
+    borderRight: 0,
+    background: '#0f172a',
     overflowX: 'hidden' as const,
   }
 
@@ -119,13 +119,12 @@ export function AppLayout() {
           color="inherit"
           elevation={0}
           sx={{
-            bgcolor: 'rgba(255, 252, 248, 0.92)',
+            bgcolor: '#ffffff',
             borderBottom: '1px solid',
             borderColor: 'divider',
-            backdropFilter: 'blur(16px)',
           }}
         >
-          <Toolbar sx={{ gap: 1.5, minHeight: { xs: 68, md: 76 }, px: { xs: 1.5, sm: 2.5 } }}>
+          <Toolbar sx={{ gap: 1.25, minHeight: 56, px: { xs: 1.5, sm: 2.5 } }}>
             <IconButton
               edge="start"
               aria-label={mobileOpen ? t('navigation:closeMenu') : t('navigation:openMenu')}
@@ -135,13 +134,10 @@ export function AppLayout() {
               {mobileOpen ? <CloseOutlinedIcon /> : <MenuOutlinedIcon />}
             </IconButton>
             <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography
-                variant="caption"
-                sx={{ display: 'block', letterSpacing: '0.14em', color: 'text.secondary', fontWeight: 650 }}
-              >
+              <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontWeight: 500 }}>
                 {current ? t(`navigation:sections.${current.section}`) : t('navigation:workspace')}
               </Typography>
-              <Typography noWrap sx={{ fontWeight: 650, fontSize: '1.05rem' }}>
+              <Typography noWrap sx={{ fontWeight: 600, fontSize: '0.95rem' }}>
                 {current ? t(`navigation:items.${current.id}`) : t('auth:appName')}
               </Typography>
             </Box>
@@ -154,16 +150,35 @@ export function AppLayout() {
               onClick={(event) => setAccountAnchor(event.currentTarget)}
               sx={{ color: 'text.primary', px: 1, minWidth: 0 }}
             >
-              <Avatar sx={{ width: 36, height: 36, bgcolor: 'primary.main', fontSize: '0.8rem', fontWeight: 700 }}>
+              <Avatar sx={{ width: 34, height: 34, bgcolor: '#e0e7ff', color: '#3730a3', fontSize: '0.75rem', fontWeight: 600 }}>
                 {initials(user?.full_name ?? '')}
               </Avatar>
               <Box sx={{ display: { xs: 'none', lg: 'block' }, textAlign: 'left', ml: 1.25, minWidth: 0 }}>
-                <Typography noWrap variant="body2" sx={{ fontWeight: 700, maxWidth: 160 }}>
+                <Typography noWrap variant="body2" sx={{ fontWeight: 600, maxWidth: 160 }}>
                   {user?.full_name}
                 </Typography>
-                <Typography noWrap variant="caption" color="text.secondary" sx={{ display: 'block', maxWidth: 160 }}>
-                  {leadRole ? roleLabel(leadRole, t) : ''}
-                </Typography>
+                {leadRole ? (
+                  <Box
+                    component="span"
+                    sx={{
+                      display: 'inline-block',
+                      mt: 0.25,
+                      bgcolor: '#e0e7ff',
+                      color: '#3730a3',
+                      borderRadius: 999,
+                      px: 1.25,
+                      py: '1px',
+                      fontSize: 12,
+                      fontWeight: 500,
+                      maxWidth: 160,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {roleLabel(leadRole, t)}
+                  </Box>
+                ) : null}
               </Box>
             </Button>
             <Menu
@@ -189,9 +204,9 @@ export function AppLayout() {
         <Box
           id="main-content"
           component="main"
-          sx={{ flex: 1, overflow: 'auto', px: { xs: 2, sm: 3, lg: 4 }, py: { xs: 2.5, md: 3.5 } }}
+          sx={{ flex: 1, overflow: 'auto', px: { xs: 1.5, sm: 2.5 }, py: { xs: 2, md: 2.5 } }}
         >
-          <Box sx={{ maxWidth: 1120, mx: 'auto' }}>
+          <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
             <Outlet />
           </Box>
         </Box>

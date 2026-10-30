@@ -189,21 +189,29 @@ export function ProjectsPage() {
             key={project.id}
             sx={{
               p: { xs: 2, sm: 2.5 },
-              borderRadius: 3,
+              borderRadius: '18px',
               border: '1px solid',
               borderColor: 'divider',
               bgcolor: 'background.paper',
               minWidth: 0,
+              transition: 'transform .18s, box-shadow .18s',
+              '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 14px 30px rgba(15,23,42,.12)' },
+              '@media (prefers-reduced-motion: reduce)': {
+                transition: 'none',
+                '&:hover': { transform: 'none' },
+              },
             }}
           >
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 1 }}>
-              <Typography sx={{ fontWeight: 700, minWidth: 0, overflowWrap: 'anywhere' }}>{project.name}</Typography>
-              <Chip size="small" label={project.code} />
+              <Typography sx={{ fontWeight: 600, minWidth: 0, overflowWrap: 'anywhere' }}>{project.name}</Typography>
+              <Chip size="small" label={project.code} sx={{ bgcolor: '#f1f5f9', color: '#334155' }} />
               <Chip
                 size="small"
                 label={project.status === 'active' ? 'Active' : 'Inactive'}
-                color={project.status === 'active' ? 'success' : 'default'}
-                variant="outlined"
+                sx={{
+                  bgcolor: project.status === 'active' ? '#d1fae5' : '#f1f5f9',
+                  color: project.status === 'active' ? '#047857' : '#64748b',
+                }}
               />
             </Stack>
             {data.can_create ? (
@@ -288,15 +296,27 @@ export function ProjectsPage() {
                       <Button
                         key={item.id}
                         type="button"
-                        variant={selected ? 'contained' : 'outlined'}
+                        variant="outlined"
                         aria-pressed={selected}
                         disabled={saving}
                         onClick={() => setTemplate(item.id)}
-                        sx={{ justifyContent: 'flex-start', textAlign: 'left', py: 1.25, px: 1.5, height: 'auto', whiteSpace: 'normal' }}
+                        sx={{
+                          justifyContent: 'flex-start',
+                          textAlign: 'left',
+                          py: 1.25,
+                          px: 1.5,
+                          height: 'auto',
+                          whiteSpace: 'normal',
+                          borderRadius: '12px',
+                          borderWidth: selected ? 2 : 1,
+                          borderColor: selected ? 'primary.main' : 'divider',
+                          bgcolor: selected ? '#eff6ff' : '#fff',
+                          '&:hover': { borderColor: 'primary.main', bgcolor: selected ? '#eff6ff' : '#fff' },
+                        }}
                       >
                         <Stack spacing={0.25} sx={{ alignItems: 'flex-start', minWidth: 0 }}>
-                          <Typography sx={{ fontWeight: 700, color: 'inherit' }}>{item.label}</Typography>
-                          <Typography variant="caption" sx={{ color: selected ? 'inherit' : 'text.secondary', textAlign: 'left' }}>
+                          <Typography sx={{ fontWeight: 600, color: 'text.primary' }}>{item.label}</Typography>
+                          <Typography variant="caption" sx={{ color: 'text.secondary', textAlign: 'left' }}>
                             {item.detail}
                           </Typography>
                         </Stack>
@@ -305,7 +325,14 @@ export function ProjectsPage() {
                   })}
                 </Box>
               </Box>
-              <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'background.default' }}>
+              <Box
+                sx={{
+                  p: 1.5,
+                  borderRadius: 1,
+                  bgcolor: duplicate ? '#fef2f2' : codeIsValid(code) ? '#ecfdf5' : '#f8fafc',
+                  color: duplicate ? 'error.main' : codeIsValid(code) ? 'success.main' : 'text.primary',
+                }}
+              >
                 <Typography sx={{ fontWeight: 700, mb: 0.75 }}>What this creates</Typography>
                 <Typography>
                   First lead number: <b>{preview}</b>

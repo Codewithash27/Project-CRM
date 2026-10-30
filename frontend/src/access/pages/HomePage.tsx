@@ -17,7 +17,7 @@ export function HomePage() {
   return (
     <Stack spacing={4}>
       <Stack spacing={1.5} sx={{ maxWidth: 720 }}>
-        <Typography variant="overline" sx={{ letterSpacing: '0.16em', color: 'secondary.dark', fontWeight: 700 }}>
+        <Typography variant="overline" sx={{ letterSpacing: '0.04em', color: 'text.secondary', fontWeight: 600 }}>
           {t('navigation:workspace')}
         </Typography>
         <Typography variant="h1">{t('navigation:homeGreeting', { name: user?.full_name ?? '' })}</Typography>
@@ -31,13 +31,12 @@ export function HomePage() {
               key={role}
               sx={{
                 px: 1.25,
-                py: 0.5,
+                py: 0.25,
                 borderRadius: 999,
-                border: '1px solid',
-                borderColor: 'divider',
-                bgcolor: 'background.paper',
-                fontSize: '0.82rem',
-                fontWeight: 650,
+                bgcolor: '#e0e7ff',
+                color: '#3730a3',
+                fontSize: 12,
+                fontWeight: 500,
               }}
             >
               {roleLabel(role, t)}
@@ -60,7 +59,17 @@ export function HomePage() {
             <Paper
               key={section}
               variant="outlined"
-              sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 3, bgcolor: 'background.paper' }}
+              sx={{
+                p: { xs: 2, sm: 2.5 },
+                borderRadius: '18px',
+                bgcolor: 'background.paper',
+                transition: 'transform .18s, box-shadow .18s',
+                '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 14px 30px rgba(15,23,42,.12)' },
+                '@media (prefers-reduced-motion: reduce)': {
+                  transition: 'none',
+                  '&:hover': { transform: 'none' },
+                },
+              }}
             >
               <Typography variant="overline" sx={{ letterSpacing: '0.14em', color: 'text.secondary', fontWeight: 700 }}>
                 {t(`navigation:sections.${section}`)}
@@ -82,12 +91,12 @@ export function HomePage() {
                           borderRadius: 2,
                           color: 'text.primary',
                           textDecoration: 'none',
-                          '&:hover': { bgcolor: 'rgba(20, 50, 79, 0.05)' },
+                          '&:hover': { bgcolor: '#f8fafc' },
                         }}
                       >
                         <Icon fontSize="small" aria-hidden sx={{ color: 'primary.main' }} />
                         <Box sx={{ minWidth: 0 }}>
-                          <Typography sx={{ fontWeight: 650, lineHeight: 1.3 }}>
+                          <Typography sx={{ fontWeight: 600, lineHeight: 1.3 }}>
                             {t(`navigation:items.${item.id}`)}
                           </Typography>
                           {item.ready ? null : (
