@@ -144,19 +144,13 @@ async def test_owner_assigns_salesperson_adds_rep_and_moves_leads(client):
             "status": "new",
             "priority": "high",
             "next_followup_at": "2026-11-02T10:30:00Z",
+            "project_id": project_id,
         },
         headers=await csrf_headers(client),
     )
     assert lead.status_code == 201, lead.text
     lead_id = lead.json()["data"]["id"]
-    db = SessionLocal()
-    try:
-        stored = db.get(Lead, uuid.UUID(lead_id))
-        assert stored is not None
-        stored.project_id = uuid.UUID(project_id)
-        db.commit()
-    finally:
-        db.close()
+    assert lead.json()["data"]["project_id"] == project_id
 
     assert (await login(client, email="owner@example.com")).status_code == 200
     moved = await client.post(

@@ -18,10 +18,23 @@ from app.leads.schemas import (
     UpdateLeadRequest,
     to_lead_public,
 )
-from app.leads.service import LeadFilters, create_lead, delete_lead, get_lead, list_leads, update_lead
+from app.leads.service import (
+    LeadFilters,
+    create_lead,
+    delete_lead,
+    get_lead,
+    list_leads,
+    project_names_for_leads,
+    update_lead,
+)
 from app.users.models import User
 
 router = APIRouter()
+
+
+def _public(lead, names: dict):  # type: ignore[no-untyped-def]
+    name = None if lead.project_id is None else names.get(lead.project_id)
+    return to_lead_public(lead, name)
 
 
 @router.post(
@@ -43,7 +56,8 @@ def post_lead(
     db: Session = Depends(get_db),
 ) -> ApiResponse[LeadPublic]:
     created = create_lead(db, actor=actor, payload=payload, ip_address=client_ip(request))
-    return ApiResponse(data=to_lead_public(created), message="Lead created.")
+    names = project_names_for_leads(db, [created])
+    return ApiResponse(data=_public(created, names), message="Lead created.")
 
 
 @router.get(
@@ -66,6 +80,7 @@ def get_leads(
     source: str | None = Query(default=None, max_length=80),
     priority: LeadPriority | None = Query(default=None),
     next_followup_at: date | None = Query(default=None),
+    project_id: uuid.UUID | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> ApiResponse[LeadListData]:
@@ -79,12 +94,14 @@ def get_leads(
             source=source,
             priority=priority,
             next_followup_on=next_followup_at,
+            project_id=project_id,
         ),
         limit=limit,
         offset=offset,
     )
+    names = project_names_for_leads(db, leads)
     return ApiResponse(
-        data=LeadListData(items=[to_lead_public(lead) for lead in leads], total=total),
+        data=LeadListData(items=[_public(lead, names) for lead in leads], total=total),
         message="Success",
     )
 
@@ -101,7 +118,9 @@ def get_one_lead(
     actor: User = Depends(require_permission("leads.read")),
     db: Session = Depends(get_db),
 ) -> ApiResponse[LeadPublic]:
-    return ApiResponse(data=to_lead_public(get_lead(db, actor=actor, lead_id=lead_id)), message="Success")
+    lead = get_lead(db, actor=actor, lead_id=lead_id)
+    names = project_names_for_leads(db, [lead])
+    return ApiResponse(data=_public(lead, names), message="Success")
 
 
 @router.patch(
@@ -128,7 +147,8 @@ def patch_lead(
         payload=payload,
         ip_address=client_ip(request),
     )
-    return ApiResponse(data=to_lead_public(updated), message="Lead updated.")
+    names = project_names_for_leads(db, [updated])
+    return ApiResponse(data=_public(updated, names), message="Lead updated.")
 
 
 @router.delete(
@@ -145,4 +165,5 @@ def remove_lead(
     db: Session = Depends(get_db),
 ) -> ApiResponse[LeadPublic]:
     deleted = delete_lead(db, actor=actor, lead_id=lead_id, ip_address=client_ip(request))
-    return ApiResponse(data=to_lead_public(deleted), message="Lead deleted.")
+    names = project_names_for_leads(db, [deleted])
+    return ApiResponse(data=_public(deleted, names), message="Lead deleted.")

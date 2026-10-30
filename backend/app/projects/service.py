@@ -24,7 +24,7 @@ TEMPLATE_DESCRIPTION = {
     "SPACE-VIEW": "Interior and space planning. Site is required, and Expected Value is the opportunity.",
 }
 
-_VIEW_ROLES = frozenset({RoleName.SUPER_ADMIN, RoleName.BUSINESS_OWNER})
+_VIEW_ROLES = frozenset({RoleName.SUPER_ADMIN, RoleName.BUSINESS_OWNER, RoleName.SALESPERSON})
 
 
 def _role_names(user: User) -> set[str]:
@@ -74,18 +74,23 @@ def _to_public(project: Project, company_name: str, lead_count: int) -> ProjectP
 
 def list_projects(db: Session, actor: User) -> tuple[list[ProjectPublic], list[Company]]:
     _require_viewer(actor)
-    company_filter = None if can_create_projects(actor) else actor.company_id
-    stmt = select(Project, Company.name).join(Company, Company.id == Project.company_id)
-    if company_filter is not None:
-        stmt = stmt.where(Project.company_id == company_filter)
-        # Business owners only see projects Super Admin assigned to them.
-        if not can_create_projects(actor):
-            member_ids = project_ids_for_member(db, actor.id)
-            if not member_ids:
-                return [], []
-            stmt = stmt.where(Project.id.in_(member_ids))
-    elif not can_create_projects(actor):
+    roles = _role_names(actor)
+    stmt = select(Project, Company.name).join(Company, Company.id == Project.company_id).where(
+        Project.status == ACTIVE
+    )
+
+    if can_create_projects(actor):
+        pass
+    elif RoleName.BUSINESS_OWNER in roles or RoleName.SALESPERSON in roles:
+        if actor.company_id is None:
+            return [], []
+        member_ids = project_ids_for_member(db, actor.id)
+        if not member_ids:
+            return [], []
+        stmt = stmt.where(Project.company_id == actor.company_id, Project.id.in_(member_ids))
+    else:
         return [], []
+
     rows = db.execute(stmt.order_by(Company.name, Project.name)).all()
     project_ids = [project.id for project, _name in rows]
     counts: dict[uuid.UUID, int] = {}

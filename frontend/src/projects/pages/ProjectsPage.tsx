@@ -162,7 +162,7 @@ export function ProjectsPage() {
           <Typography color="text.secondary">
             {data?.can_create
               ? 'Create a project under a business. Owners of that business are assigned automatically — fine-tune on Team.'
-              : 'Projects the platform admin assigned to you. Each one has its own lead numbers.'}
+              : 'Projects assigned to you. Create leads under these projects from the Leads page.'}
           </Typography>
         </Stack>
         {data?.can_create ? (
@@ -175,7 +175,11 @@ export function ProjectsPage() {
       {error ? <ErrorAlert message={error} /> : null}
 
       {data && data.items.length === 0 ? (
-        <Typography color="text.secondary">No project yet. The first one you create will appear here.</Typography>
+        <Typography color="text.secondary">
+          {data.can_create
+            ? 'No project yet. The first one you create will appear here.'
+            : 'No project assigned to you yet. Ask your business owner to tick you on Team.'}
+        </Typography>
       ) : null}
       <Box
         sx={{

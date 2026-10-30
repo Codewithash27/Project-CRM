@@ -103,5 +103,8 @@ async def test_super_admin_creates_a_project_and_owner_can_see_it(client):
     assert blocked.status_code == 403
 
     assert (await login(client, email="rep@example.com")).status_code == 200
-    denied = await client.get("/api/v1/projects")
-    assert denied.status_code == 403
+    # Salesperson with no Team assignment sees an empty project list.
+    listed_rep = await client.get("/api/v1/projects")
+    assert listed_rep.status_code == 200
+    assert listed_rep.json()["data"]["items"] == []
+    assert listed_rep.json()["data"]["can_create"] is False

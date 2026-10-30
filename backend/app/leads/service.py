@@ -17,9 +17,24 @@ from app.audit.service import record_audit
 from app.common.exceptions import AppError, ErrorCode
 from app.core.logging import log_event
 from app.leads.models import Lead
-from app.leads.schemas import CreateLeadRequest, UpdateLeadRequest
-from app.organization.models import Company
+from app.leads.schemas import CreateLeadRequest, UpdateLeadRequest, normalize_priority, normalize_status
+
+_PRIORITY_FILTER_VALUES: dict[str, tuple[str, ...]] = {
+    "high": ("high", "Hot"),
+    "medium": ("medium", "Warm"),
+    "low": ("low", "Cold"),
+}
+_STATUS_FILTER_VALUES: dict[str, tuple[str, ...]] = {
+    "new": ("new", "New"),
+    "contacted": ("contacted", "Contacted", "In Progress", "Nurture"),
+    "qualified": ("qualified", "Qualified", "Won"),
+    "unqualified": ("unqualified",),
+    "lost": ("lost", "Lost"),
+}
+from app.organization.models import ACTIVE, Company, Project
 from app.permissions.service import get_permission_keys
+from app.roles.service import RoleName
+from app.team.service import project_ids_for_member
 from app.users.models import User
 from app.users.service import is_platform_admin
 
@@ -36,6 +51,7 @@ class LeadFilters:
     source: str | None = None
     priority: str | None = None
     next_followup_on: date | None = None
+    project_id: uuid.UUID | None = None
 
 
 def _validation(field: str, code: str, message: str) -> AppError:
@@ -114,9 +130,54 @@ def _visible(db: Session, actor: User, lead_id: uuid.UUID) -> Lead:
     return lead
 
 
-def _next_lead_number(db: Session) -> str:
-    number = db.execute(text("SELECT nextval('lead_number_seq')")).scalar_one()
-    return f"LEAD-{int(number):06d}"
+def _next_lead_number(db: Session, project: Project | None = None) -> str:
+    if project is None:
+        number = db.execute(text("SELECT nextval('lead_number_seq')")).scalar_one()
+        return f"LEAD-{int(number):06d}"
+    count = int(
+        db.scalar(
+            select(func.count()).select_from(Lead).where(Lead.project_id == project.id, Lead.is_deleted.is_(False))
+        )
+        or 0
+    )
+    return f"{project.code}-{count + 1:04d}"
+
+
+def _role_names(user: User) -> set[str]:
+    return {link.role.name for link in user.user_roles}
+
+
+def _project_for_lead(
+    db: Session,
+    actor: User,
+    company_id: uuid.UUID,
+    project_id: uuid.UUID | None,
+    *,
+    required: bool,
+) -> Project | None:
+    if project_id is None:
+        if required:
+            raise _validation("project_id", "REQUIRED", "Choose a project.")
+        return None
+    project = db.get(Project, project_id)
+    if project is None or project.status != ACTIVE or project.company_id != company_id:
+        raise _validation("project_id", "UNKNOWN_PROJECT", "Choose a project.")
+    if RoleName.SUPER_ADMIN in _role_names(actor):
+        return project
+    if actor.company_id != company_id:
+        raise _validation("project_id", "UNKNOWN_PROJECT", "Choose a project.")
+    member_ids = project_ids_for_member(db, actor.id)
+    if project.id not in member_ids:
+        raise _validation("project_id", "NOT_ASSIGNED", "You are not assigned to this project.")
+    return project
+
+
+def project_names_for_leads(db: Session, leads: list[Lead]) -> dict[uuid.UUID, str]:
+    ids = {lead.project_id for lead in leads if lead.project_id is not None}
+    if not ids:
+        return {}
+    rows = db.execute(select(Project.id, Project.name).where(Project.id.in_(ids))).all()
+    return {project_id: name for project_id, name in rows}
 
 
 def _search_clause(term: str) -> Any:
@@ -152,11 +213,24 @@ def list_leads(
     if filters.owner_id is not None:
         conditions.append(Lead.owner_id == filters.owner_id)
     if filters.status is not None:
-        conditions.append(Lead.status == filters.status)
+        status_values = _STATUS_FILTER_VALUES.get(normalize_status(filters.status), (filters.status,))
+        conditions.append(Lead.status.in_(status_values))
     if filters.priority is not None:
-        conditions.append(Lead.priority == filters.priority)
+        priority_values = _PRIORITY_FILTER_VALUES.get(normalize_priority(filters.priority), (filters.priority,))
+        conditions.append(Lead.priority.in_(priority_values))
     if filters.source is not None and filters.source.strip():
         conditions.append(Lead.lead_source == filters.source.strip())
+    if filters.project_id is not None:
+        conditions.append(Lead.project_id == filters.project_id)
+    # Salespeople only work leads on projects they are assigned to (plus their own unscoped legacy rows).
+    if RoleName.SALESPERSON in {link.role.name for link in actor.user_roles} and RoleName.BUSINESS_OWNER not in {
+        link.role.name for link in actor.user_roles
+    } and RoleName.SUPER_ADMIN not in {link.role.name for link in actor.user_roles}:
+        member_ids = project_ids_for_member(db, actor.id)
+        if member_ids:
+            conditions.append(or_(Lead.project_id.in_(member_ids), Lead.project_id.is_(None)))
+        else:
+            return [], 0
     if filters.next_followup_on is not None:
         start = datetime(
             filters.next_followup_on.year,
@@ -200,10 +274,13 @@ def create_lead(
     if payload.owner_id is None and actor.company_id != company_id:
         raise _validation("owner_id", "REQUIRED", "Owner is required.")
     _owner_for_company(db, actor, owner_id, company_id, reassigning=owner_id != actor.id)
+    require_project = RoleName.SALESPERSON in _role_names(actor) and RoleName.SUPER_ADMIN not in _role_names(actor)
+    project = _project_for_lead(db, actor, company_id, payload.project_id, required=require_project)
     now = datetime.now(UTC)
     lead = Lead(
         company_id=company_id,
-        lead_number=_next_lead_number(db),
+        project_id=None if project is None else project.id,
+        lead_number=_next_lead_number(db, project),
         full_name=payload.full_name,
         mobile=mobile,
         alternate_mobile=alternate,
@@ -313,6 +390,17 @@ def update_lead(
             raise _validation("next_followup_at", "REQUIRED", "Next follow-up is required.")
         lead.next_followup_at = payload.next_followup_at
         changed.append("next_followup_at")
+    if "project_id" in fields:
+        project = _project_for_lead(
+            db,
+            actor,
+            lead.company_id,
+            payload.project_id,
+            required=payload.project_id is not None
+            or (RoleName.SALESPERSON in _role_names(actor) and RoleName.SUPER_ADMIN not in _role_names(actor)),
+        )
+        lead.project_id = None if project is None else project.id
+        changed.append("project_id")
     if "owner_id" in fields:
         if payload.owner_id is None:
             raise _validation("owner_id", "REQUIRED", "Owner is required.")

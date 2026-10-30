@@ -9,6 +9,7 @@ function ids(roles: string[], permissions: string[] = []) {
 describe('visibleNav', () => {
   it('gives a salesperson their lead menu and hides setup', () => {
     expect(ids(['SALESPERSON'])).toEqual([
+      'projects',
       'reminders',
       'leads',
       'leadFields',

@@ -36,7 +36,7 @@
   "hints": {
     "home": "One card per project: leads, overdue follow-ups, won leads, and the salespeople on it.",
     "businesses": "Create a business, see who is on it, and suspend or activate it.",
-    "projects": "A line of work with its own lead numbers, such as PRESCHOOL-0001.",
+    "projects": "A line of work with its own lead numbers. Salespeople see only projects assigned on Team.",
     "users": "Create the Business Owner first, then the other people in that business.",
     "roles": "See which role opens which menu, and create a custom role.",
     "team": "Super Admin assigns projects to business owners. Business owners assign salespeople and can move leads.",
@@ -51,7 +51,7 @@
   "roleIntro": {
     "SUPER_ADMIN": "You create businesses, projects, users, and roles. On Team, assign each project to the business owners who should see it.",
     "BUSINESS_OWNER": "You assign salespeople to projects and watch every lead. You do not work the calls.",
-    "SALESPERSON": "You work the leads in the projects assigned to you.",
+    "SALESPERSON": "Open Projects to see what you are assigned to, then create and work leads there.",
     "MARKETING": "You see campaign results only. Lead notes stay hidden.",
     "default": "The menu shows the areas this account can open."
   }

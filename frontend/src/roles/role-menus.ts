@@ -37,7 +37,7 @@ export const SYSTEM_ROLE_MENUS: Record<string, string[]> = {
   SUPER_ADMIN: ['Businesses', 'Plans', 'Projects', 'Users', 'Roles', 'Team'],
   BUSINESS_OWNER: ['Home', 'Projects', 'Team', 'Leads', 'Pipeline', 'Follow-ups', 'KPIs'],
   MARKETING: ['Campaigns'],
-  SALESPERSON: ['Reminders', 'Leads', 'Pipeline', 'Follow-ups', 'KPIs'],
+  SALESPERSON: ['Projects', 'Reminders', 'Leads', 'Pipeline', 'Follow-ups', 'KPIs'],
 }
 
 /** Map a friendly menu tick to API permission keys when creating a custom role. */

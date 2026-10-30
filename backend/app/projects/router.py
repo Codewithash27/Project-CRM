@@ -19,7 +19,7 @@ router = APIRouter()
     summary="List projects",
     description=(
         "A Super Admin sees every project and the businesses that can receive a new one. "
-        "A Business Owner sees only the projects of their business."
+        "A Business Owner or Salesperson sees projects assigned to them."
     ),
     responses=error_responses(401, 403),
 )

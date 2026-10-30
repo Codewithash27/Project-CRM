@@ -37,7 +37,7 @@ export type NavItem = {
 export const NAV_ITEMS: readonly NavItem[] = [
   { id: 'businesses', path: '/app/businesses', section: 'menu', roles: SUPER_ADMIN, icon: DomainOutlinedIcon },
   { id: 'home', path: '/app', section: 'menu', roles: OWNER, icon: HomeOutlinedIcon },
-  { id: 'projects', path: '/app/projects', section: 'menu', roles: [...SUPER_ADMIN, ...OWNER], ready: true, icon: WorkOutlineOutlinedIcon },
+  { id: 'projects', path: '/app/projects', section: 'menu', roles: [...SUPER_ADMIN, ...OWNER, ...SALES], ready: true, icon: WorkOutlineOutlinedIcon },
   {
     id: 'users',
     path: '/app/users',
@@ -62,8 +62,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
     ready: true,
     icon: GroupsOutlinedIcon,
   },
-  { id: 'reminders', path: '/app/reminders', section: 'menu', roles: SALES, icon: TodayOutlinedIcon },
-  { id: 'leads', path: '/app/leads', section: 'menu', roles: [...OWNER, ...SALES], icon: PersonSearchOutlinedIcon },
+  { id: 'reminders', path: '/app/reminders', section: 'menu', roles: SALES, ready: true, icon: TodayOutlinedIcon },
+  { id: 'leads', path: '/app/leads', section: 'menu', roles: [...OWNER, ...SALES], ready: true, icon: PersonSearchOutlinedIcon },
   { id: 'leadFields', path: '/app/lead-fields', section: 'menu', roles: [...OWNER, ...SALES], icon: TuneOutlinedIcon },
   { id: 'pipeline', path: '/app/pipeline', section: 'menu', roles: [...OWNER, ...SALES], icon: AccountTreeOutlinedIcon },
   { id: 'followUps', path: '/app/follow-ups', section: 'menu', roles: [...OWNER, ...SALES], icon: TaskAltOutlinedIcon },

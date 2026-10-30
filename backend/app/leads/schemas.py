@@ -13,6 +13,38 @@ from app.leads.models import Lead
 LeadStatus = Literal["new", "contacted", "qualified", "unqualified", "lost"]
 LeadPriority = Literal["low", "medium", "high"]
 
+# Demo seed rows used title-case labels; API always returns canonical values.
+_PRIORITY_PUBLIC = {
+    "low": "low",
+    "medium": "medium",
+    "high": "high",
+    "Cold": "low",
+    "Warm": "medium",
+    "Hot": "high",
+}
+_STATUS_PUBLIC = {
+    "new": "new",
+    "contacted": "contacted",
+    "qualified": "qualified",
+    "unqualified": "unqualified",
+    "lost": "lost",
+    "New": "new",
+    "Contacted": "contacted",
+    "In Progress": "contacted",
+    "Qualified": "qualified",
+    "Won": "qualified",
+    "Lost": "lost",
+    "Nurture": "contacted",
+}
+
+
+def normalize_priority(value: str) -> str:
+    return _PRIORITY_PUBLIC.get(value, "medium")
+
+
+def normalize_status(value: str) -> str:
+    return _STATUS_PUBLIC.get(value, "new")
+
 
 def _collapse(value: str) -> str:
     return " ".join(value.split())
@@ -40,6 +72,7 @@ class CreateLeadRequest(BaseModel):
     lead_source: str | None = Field(default=None, max_length=80)
     owner_id: uuid.UUID | None = None
     company_id: uuid.UUID | None = None
+    project_id: uuid.UUID | None = None
     status: LeadStatus = "new"
     priority: LeadPriority = "medium"
     next_followup_at: datetime
@@ -89,6 +122,7 @@ class UpdateLeadRequest(BaseModel):
     expected_value: Decimal | None = Field(default=None, ge=0, max_digits=15, decimal_places=2)
     lead_source: str | None = Field(default=None, max_length=80)
     owner_id: uuid.UUID | None = None
+    project_id: uuid.UUID | None = None
     status: LeadStatus | None = None
     priority: LeadPriority | None = None
     next_followup_at: datetime | None = None
@@ -129,6 +163,8 @@ class UpdateLeadRequest(BaseModel):
 class LeadPublic(BaseModel):
     id: str
     company_id: str
+    project_id: str | None
+    project_name: str | None
     lead_number: str
     full_name: str
     mobile: str
@@ -155,11 +191,13 @@ class LeadListData(BaseModel):
     total: int
 
 
-def to_lead_public(lead: Lead) -> LeadPublic:
+def to_lead_public(lead: Lead, project_name: str | None = None) -> LeadPublic:
     expected = None if lead.expected_value is None else f"{lead.expected_value:.2f}"
     return LeadPublic(
         id=str(lead.id),
         company_id=str(lead.company_id),
+        project_id=None if lead.project_id is None else str(lead.project_id),
+        project_name=project_name,
         lead_number=lead.lead_number,
         full_name=lead.full_name,
         mobile=lead.mobile,
@@ -173,8 +211,8 @@ def to_lead_public(lead: Lead) -> LeadPublic:
         lead_source=lead.lead_source,
         owner_id=str(lead.owner_id),
         created_by_id=str(lead.created_by_id),
-        status=lead.status,
-        priority=lead.priority,
+        status=normalize_status(lead.status),
+        priority=normalize_priority(lead.priority),
         next_followup_at=lead.next_followup_at,
         is_deleted=lead.is_deleted,
         created_at=lead.created_at,

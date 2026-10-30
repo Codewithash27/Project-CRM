@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.leads.models import Lead
-from app.organization.models import ACTIVE, Company, Team
+from app.organization.models import ACTIVE, Company, Project, ProjectMember, Team
 from app.roles.models import UserRole
 from app.roles.service import get_role_by_name
 from app.users.models import User
@@ -83,6 +83,36 @@ def _add_member(
         db.close()
 
 
+def _add_project(
+    company_id: uuid.UUID,
+    *,
+    name: str = "Field",
+    code: str = "FIELD",
+    member_ids: list[uuid.UUID] | None = None,
+) -> uuid.UUID:
+    db = SessionLocal()
+    try:
+        now = _now()
+        project = Project(
+            company_id=company_id,
+            name=name,
+            code=code,
+            template="GENERIC",
+            description="Test project",
+            status=ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(project)
+        db.flush()
+        for user_id in member_ids or []:
+            db.add(ProjectMember(project_id=project.id, user_id=user_id, assigned_by_id=None, created_at=now))
+        db.commit()
+        return project.id
+    finally:
+        db.close()
+
+
 def _lead_payload(**overrides: object) -> dict[str, object]:
     payload: dict[str, object] = {
         "full_name": "Asha Patil",
@@ -110,15 +140,25 @@ async def test_sales_rep_crud_is_limited_to_own_leads(client):
     team_id = _add_team(company_id, "Field")
     rep_id = _add_member("rep@example.com", "SALESPERSON", company_id=company_id, team_id=team_id)
     mate_id = _add_member("mate@example.com", "SALESPERSON", company_id=company_id, team_id=team_id)
+    project_id = _add_project(company_id, member_ids=[rep_id, mate_id])
 
-    anonymous = await client.post("/api/v1/leads", json=_lead_payload(), headers=await csrf_headers(client))
+    anonymous = await client.post(
+        "/api/v1/leads",
+        json=_lead_payload(project_id=str(project_id)),
+        headers=await csrf_headers(client),
+    )
     assert anonymous.status_code == 401
 
     await _login(client, "rep@example.com")
-    created = await client.post("/api/v1/leads", json=_lead_payload(), headers=await csrf_headers(client))
+    created = await client.post(
+        "/api/v1/leads",
+        json=_lead_payload(project_id=str(project_id)),
+        headers=await csrf_headers(client),
+    )
     assert created.status_code == 201
     body = created.json()["data"]
-    assert body["lead_number"].startswith("LEAD-")
+    assert body["lead_number"].startswith("FIELD-")
+    assert body["project_id"] == str(project_id)
     assert body["owner_id"] == str(rep_id)
     assert body["created_by_id"] == str(rep_id)
     assert body["company_id"] == str(company_id)
@@ -133,7 +173,12 @@ async def test_sales_rep_crud_is_limited_to_own_leads(client):
 
     blocked_owner = await client.post(
         "/api/v1/leads",
-        json=_lead_payload(full_name="Other Lead", mobile="9876543211", owner_id=str(mate_id)),
+        json=_lead_payload(
+            full_name="Other Lead",
+            mobile="9876543211",
+            owner_id=str(mate_id),
+            project_id=str(project_id),
+        ),
         headers=await csrf_headers(client),
     )
     assert blocked_owner.status_code == 403
@@ -183,13 +228,19 @@ async def test_salesperson_own_scope_and_owner_sees_company_leads(client):
     desk_id = _add_team(company_id, "Desk")
     rep_id = _add_member("rep@example.com", "SALESPERSON", company_id=company_id, team_id=field_id)
     mate_id = _add_member("mate@example.com", "SALESPERSON", company_id=company_id, team_id=field_id)
-    _add_member("desk@example.com", "SALESPERSON", company_id=company_id, team_id=desk_id)
-    _add_member("owner@example.com", "BUSINESS_OWNER", company_id=company_id)
+    desk_user = _add_member("desk@example.com", "SALESPERSON", company_id=company_id, team_id=desk_id)
+    owner_id = _add_member("owner@example.com", "BUSINESS_OWNER", company_id=company_id)
+    project_id = _add_project(company_id, member_ids=[rep_id, mate_id, desk_user, owner_id])
 
     await _login(client, "rep@example.com")
     own = await client.post(
         "/api/v1/leads",
-        json=_lead_payload(full_name="Owned Lead", mobile="9000000001", email="owned@example.com"),
+        json=_lead_payload(
+            full_name="Owned Lead",
+            mobile="9000000001",
+            email="owned@example.com",
+            project_id=str(project_id),
+        ),
         headers=await csrf_headers(client),
     )
     assert own.status_code == 201
@@ -198,7 +249,12 @@ async def test_salesperson_own_scope_and_owner_sees_company_leads(client):
     await _login(client, "desk@example.com")
     outside = await client.post(
         "/api/v1/leads",
-        json=_lead_payload(full_name="Desk Lead", mobile="9000000002", email="desk.lead@example.com"),
+        json=_lead_payload(
+            full_name="Desk Lead",
+            mobile="9000000002",
+            email="desk.lead@example.com",
+            project_id=str(project_id),
+        ),
         headers=await csrf_headers(client),
     )
     assert outside.status_code == 201
@@ -224,7 +280,12 @@ async def test_salesperson_own_scope_and_owner_sees_company_leads(client):
     assert (await client.get(f"/api/v1/leads/{own_id}")).status_code == 200
     create_blocked = await client.post(
         "/api/v1/leads",
-        json=_lead_payload(full_name="Owner Lead", mobile="9000000003", email="owner.lead@example.com"),
+        json=_lead_payload(
+            full_name="Owner Lead",
+            mobile="9000000003",
+            email="owner.lead@example.com",
+            project_id=str(project_id),
+        ),
         headers=await csrf_headers(client),
     )
     assert create_blocked.status_code == 403
@@ -233,14 +294,21 @@ async def test_salesperson_own_scope_and_owner_sees_company_leads(client):
 async def test_business_owner_is_limited_to_one_company_and_salesperson_soft_deletes(client):
     north = _add_company("North")
     south = _add_company("South")
-    _add_member("north-owner@example.com", "BUSINESS_OWNER", company_id=north)
+    north_owner = _add_member("north-owner@example.com", "BUSINESS_OWNER", company_id=north)
     south_rep = _add_member("south-rep@example.com", "SALESPERSON", company_id=south)
     north_rep = _add_member("north-rep@example.com", "SALESPERSON", company_id=north)
+    north_project = _add_project(north, code="NORTH", member_ids=[north_owner, north_rep])
+    south_project = _add_project(south, code="SOUTH", member_ids=[south_rep])
 
     await _login(client, "south-rep@example.com")
     south_lead = await client.post(
         "/api/v1/leads",
-        json=_lead_payload(full_name="South Lead", mobile="9000000011", email="south.lead@example.com"),
+        json=_lead_payload(
+            full_name="South Lead",
+            mobile="9000000011",
+            email="south.lead@example.com",
+            project_id=str(south_project),
+        ),
         headers=await csrf_headers(client),
     )
     assert south_lead.status_code == 201
@@ -253,6 +321,7 @@ async def test_business_owner_is_limited_to_one_company_and_salesperson_soft_del
             full_name="North Lead",
             mobile="9000000012",
             email="north.lead@example.com",
+            project_id=str(north_project),
         ),
         headers=await csrf_headers(client),
     )
@@ -268,7 +337,7 @@ async def test_business_owner_is_limited_to_one_company_and_salesperson_soft_del
     assert (await client.get(f"/api/v1/leads/{south_id}")).status_code == 404
     other_company = await client.post(
         "/api/v1/leads",
-        json=_lead_payload(company_id=str(south), owner_id=str(south_rep)),
+        json=_lead_payload(company_id=str(south), owner_id=str(south_rep), project_id=str(south_project)),
         headers=await csrf_headers(client),
     )
     assert other_company.status_code == 403
@@ -294,17 +363,24 @@ async def test_platform_admin_sees_every_company(client):
     north_rep = _add_member("north-rep@example.com", "SALESPERSON", company_id=north)
     south_rep = _add_member("south-rep@example.com", "SALESPERSON", company_id=south)
     _add_member("root@example.com", "SUPER_ADMIN")
+    north_project = _add_project(north, code="NORTH", member_ids=[north_rep])
+    south_project = _add_project(south, code="SOUTH", member_ids=[south_rep])
 
     await _login(client, "north-rep@example.com")
     north_lead = await client.post(
         "/api/v1/leads",
-        json=_lead_payload(full_name="North Lead", mobile="9000000021"),
+        json=_lead_payload(full_name="North Lead", mobile="9000000021", project_id=str(north_project)),
         headers=await csrf_headers(client),
     )
     await _login(client, "south-rep@example.com")
     south_lead = await client.post(
         "/api/v1/leads",
-        json=_lead_payload(full_name="South Lead", mobile="9000000022", email="south2@example.com"),
+        json=_lead_payload(
+            full_name="South Lead",
+            mobile="9000000022",
+            email="south2@example.com",
+            project_id=str(south_project),
+        ),
         headers=await csrf_headers(client),
     )
     await _login(client, "root@example.com")
@@ -328,6 +404,7 @@ async def test_platform_admin_sees_every_company(client):
         json=_lead_payload(
             company_id=str(south),
             owner_id=str(south_rep),
+            project_id=str(south_project),
             full_name="Platform Lead",
             mobile="9000000024",
             email="platform.lead@example.com",
@@ -344,11 +421,12 @@ async def test_marketing_cannot_access_leads(client):
     company_id = _add_company("North")
     rep_id = _add_member("rep@example.com", "SALESPERSON", company_id=company_id)
     _add_member("marketer@example.com", "MARKETING", company_id=company_id)
+    project_id = _add_project(company_id, member_ids=[rep_id])
 
     await _login(client, "rep@example.com")
     created = await client.post(
         "/api/v1/leads",
-        json=_lead_payload(full_name="Readable Lead", mobile="9000000031"),
+        json=_lead_payload(full_name="Readable Lead", mobile="9000000031", project_id=str(project_id)),
         headers=await csrf_headers(client),
     )
     assert created.status_code == 201
@@ -377,7 +455,8 @@ async def test_lead_filters_and_pagination(client):
     company_id = _add_company("North")
     rep_id = _add_member("rep@example.com", "SALESPERSON", company_id=company_id)
     mate_id = _add_member("mate@example.com", "SALESPERSON", company_id=company_id)
-    _add_member("owner@example.com", "BUSINESS_OWNER", company_id=company_id)
+    owner_id = _add_member("owner@example.com", "BUSINESS_OWNER", company_id=company_id)
+    project_id = _add_project(company_id, member_ids=[rep_id, mate_id, owner_id])
 
     await _login(client, "rep@example.com")
     first = await client.post(
@@ -390,6 +469,7 @@ async def test_lead_filters_and_pagination(client):
             status="new",
             priority="high",
             next_followup_at=FOLLOW_UP,
+            project_id=str(project_id),
         ),
         headers=await csrf_headers(client),
     )
@@ -405,6 +485,7 @@ async def test_lead_filters_and_pagination(client):
             status="qualified",
             priority="low",
             next_followup_at=LATER,
+            project_id=str(project_id),
         ),
         headers=await csrf_headers(client),
     )
@@ -445,7 +526,8 @@ async def test_lead_filters_and_pagination(client):
 
 async def test_lead_validation_rejects_incomplete_or_unknown_values(client):
     company_id = _add_company("North")
-    _add_member("rep@example.com", "SALESPERSON", company_id=company_id)
+    rep_id = _add_member("rep@example.com", "SALESPERSON", company_id=company_id)
+    project_id = _add_project(company_id, member_ids=[rep_id])
     await _login(client, "rep@example.com")
     headers = await csrf_headers(client)
 
@@ -454,7 +536,7 @@ async def test_lead_validation_rejects_incomplete_or_unknown_values(client):
 
     bad_mobile = await client.post(
         "/api/v1/leads",
-        json=_lead_payload(mobile="123"),
+        json=_lead_payload(mobile="123", project_id=str(project_id)),
         headers=headers,
     )
     assert bad_mobile.status_code == 422
@@ -462,12 +544,12 @@ async def test_lead_validation_rejects_incomplete_or_unknown_values(client):
 
     bad_status = await client.post(
         "/api/v1/leads",
-        json=_lead_payload(status="won"),
+        json=_lead_payload(status="won", project_id=str(project_id)),
         headers=headers,
     )
     assert bad_status.status_code == 422
 
-    no_csrf = await client.post("/api/v1/leads", json=_lead_payload())
+    no_csrf = await client.post("/api/v1/leads", json=_lead_payload(project_id=str(project_id)))
     assert no_csrf.status_code == 403
     assert no_csrf.json()["error"]["code"] == "CSRF_VALIDATION_FAILED"
 
