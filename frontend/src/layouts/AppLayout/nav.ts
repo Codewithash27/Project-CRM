@@ -17,20 +17,11 @@ export const SECTIONS = ['menu'] as const
 export type NavSection = (typeof SECTIONS)[number]
 
 const SUPER_ADMIN = ['SUPER_ADMIN'] as const
-const OWNER = ['BUSINESS_OWNER', 'ADMIN'] as const
-const SALES = ['SALESPERSON', 'SALES_REP', 'SALES_MANAGER'] as const
+const OWNER = ['BUSINESS_OWNER'] as const
+const SALES = ['SALESPERSON'] as const
 const MARKETING = ['MARKETING'] as const
 
-const ROLE_RANK = [
-  'SUPER_ADMIN',
-  'ADMIN',
-  'BUSINESS_OWNER',
-  'SALES_MANAGER',
-  'SALES_REP',
-  'SALESPERSON',
-  'MARKETING',
-  'VIEWER',
-] as const
+const ROLE_RANK = ['SUPER_ADMIN', 'BUSINESS_OWNER', 'SALESPERSON', 'MARKETING'] as const
 
 export type NavItem = {
   id: string

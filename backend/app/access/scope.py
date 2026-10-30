@@ -13,8 +13,7 @@ from app.core.database import get_db
 from app.roles.service import RoleName
 from app.users.models import User
 
-_ALL_ROLES = frozenset({RoleName.SUPER_ADMIN, RoleName.ADMIN, RoleName.BUSINESS_OWNER})
-_TEAM_ROLES = frozenset({RoleName.SALES_MANAGER})
+_ALL_ROLES = frozenset({RoleName.SUPER_ADMIN, RoleName.BUSINESS_OWNER})
 
 
 class AccessScope(StrEnum):
@@ -41,15 +40,13 @@ class RecordScope:
 def resolve_access_scope(user: User) -> AccessScope:
     """Return the widest scope granted by the user's roles.
 
-    SALES_REP, SALESPERSON, VIEWER, and MARKETING are OWN.
-    SALES_MANAGER is TEAM. ADMIN, BUSINESS_OWNER, and SUPER_ADMIN are ALL.
+    SALESPERSON and MARKETING are OWN.
+    BUSINESS_OWNER and SUPER_ADMIN are ALL.
     """
 
     names = {link.role.name for link in user.user_roles}
     if names & _ALL_ROLES:
         return AccessScope.ALL
-    if names & _TEAM_ROLES:
-        return AccessScope.TEAM
     return AccessScope.OWN
 
 

@@ -51,9 +51,8 @@ def post_lead(
     response_model=ApiResponse[LeadListData],
     summary="List leads",
     description=(
-        "Returns leads visible to the caller. A sales representative sees leads they own. "
-        "A sales manager sees leads owned by people on their team, including their own. "
-        "An administrator sees every lead in their company. A platform administrator sees every company. "
+        "Returns leads visible to the caller. A salesperson sees leads they own. "
+        "A business owner sees every lead in their company. A super admin sees every company. "
         "next_followup_at matches that calendar date in UTC. Results are paginated."
     ),
     responses=error_responses(401, 403, 422),
@@ -111,7 +110,7 @@ def get_one_lead(
     summary="Update a lead",
     description=(
         "Updates a lead inside the caller's scope. Changing owner_id assigns the lead and requires "
-        "leads.assign. Sales representatives cannot assign a lead to someone else."
+        "leads.assign. Salespeople cannot assign a lead to someone else."
     ),
     responses=error_responses(401, 403, 404, 422),
 )

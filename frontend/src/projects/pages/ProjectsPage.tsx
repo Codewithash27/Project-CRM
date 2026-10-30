@@ -161,8 +161,8 @@ export function ProjectsPage() {
           <Typography variant="h1">Projects</Typography>
           <Typography color="text.secondary">
             {data?.can_create
-              ? 'Each project belongs to a business and starts its own lead numbers, such as PRESCHOOL-0001.'
-              : 'Projects given to your business. Each one has its own lead numbers.'}
+              ? 'Create a project and assign it to a business. That business owner then sees it and can give it to salespeople on Team.'
+              : 'Projects given to your business by the platform admin. Each one has its own lead numbers.'}
           </Typography>
         </Stack>
         {data?.can_create ? (
@@ -241,6 +241,9 @@ export function ProjectsPage() {
           <DialogTitle id="create-project-title">Create project</DialogTitle>
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 0.5 }}>
+              <Typography color="text.secondary">
+                Pick the business first. Creating the project assigns it to that business owner automatically.
+              </Typography>
               <TextField
                 id="project-name"
                 label="Project name"
@@ -270,12 +273,12 @@ export function ProjectsPage() {
               <TextField
                 id="project-business"
                 select
-                label="Business"
+                label="Assign to business"
                 value={companyId}
                 required
                 fullWidth
                 error={Boolean(fieldErrors.company_id)}
-                helperText={fieldErrors.company_id}
+                helperText={fieldErrors.company_id || 'The Business Owner of this organisation will see the project.'}
                 disabled={saving || !data || data.companies.length === 0}
                 onChange={(event) => setCompanyId(event.target.value)}
               >

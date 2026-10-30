@@ -22,10 +22,6 @@ class RoleName:
     BUSINESS_OWNER = "BUSINESS_OWNER"
     MARKETING = "MARKETING"
     SALESPERSON = "SALESPERSON"
-    ADMIN = "ADMIN"
-    SALES_MANAGER = "SALES_MANAGER"
-    SALES_REP = "SALES_REP"
-    VIEWER = "VIEWER"
 
 
 def get_role_by_name(db: Session, name: str) -> Role | None:

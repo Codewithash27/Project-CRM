@@ -32,16 +32,12 @@ export const MATRIX_COLUMNS = [
 
 export type MatrixColumn = (typeof MATRIX_COLUMNS)[number]
 
-/** Fixed menus for built-in roles (same map as the approval demo). */
+/** Fixed menus for the four product roles. */
 export const SYSTEM_ROLE_MENUS: Record<string, string[]> = {
   SUPER_ADMIN: ['Businesses', 'Plans', 'Projects', 'Users', 'Roles'],
   BUSINESS_OWNER: ['Home', 'Projects', 'Team', 'Leads', 'Pipeline', 'Follow-ups', 'KPIs'],
-  ADMIN: ['Home', 'Projects', 'Team', 'Leads', 'Pipeline', 'Follow-ups', 'KPIs'],
   MARKETING: ['Campaigns'],
   SALESPERSON: ['Reminders', 'Leads', 'Pipeline', 'Follow-ups', 'KPIs'],
-  SALES_REP: ['Reminders', 'Leads', 'Pipeline', 'Follow-ups', 'KPIs'],
-  SALES_MANAGER: ['Reminders', 'Leads', 'Pipeline', 'Follow-ups', 'KPIs'],
-  VIEWER: [],
 }
 
 /** Map a friendly menu tick to API permission keys when creating a custom role. */
@@ -91,17 +87,13 @@ export function matrixCell(roleName: string, menus: string[], column: MatrixColu
     return { yes: roleName === 'SUPER_ADMIN' }
   }
   if (column === 'Assign projects') {
-    return { yes: roleName === 'BUSINESS_OWNER' || roleName === 'ADMIN' || roleName === 'SUPER_ADMIN' }
+    return { yes: roleName === 'BUSINESS_OWNER' || roleName === 'SUPER_ADMIN' }
   }
   if (column === 'Assign salespeople') {
-    return { yes: roleName === 'BUSINESS_OWNER' || roleName === 'ADMIN' }
+    return { yes: roleName === 'BUSINESS_OWNER' }
   }
   const yes = menus.includes(column)
-  if (
-    yes &&
-    (roleName === 'BUSINESS_OWNER' || roleName === 'ADMIN') &&
-    ['Leads', 'Pipeline', 'Follow-ups', 'KPIs'].includes(column)
-  ) {
+  if (yes && roleName === 'BUSINESS_OWNER' && ['Leads', 'Pipeline', 'Follow-ups', 'KPIs'].includes(column)) {
     return { yes: true, note: 'View only' }
   }
   return { yes }

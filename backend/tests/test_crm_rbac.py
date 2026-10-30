@@ -129,7 +129,7 @@ async def test_public_registration_stays_inactive_until_approval(client):
 async def test_admin_creates_user_without_returning_the_password(client):
     company_id = _add_company("North")
     team_id = _add_team(company_id, "Field")
-    manager_id = _add_member("manager@example.com", "SALES_MANAGER", company_id=company_id, team_id=team_id)
+    manager_id = _add_member("manager@example.com", "SALESPERSON", company_id=company_id, team_id=team_id)
     await _platform_admin(client)
 
     created = await client.post(
@@ -138,7 +138,7 @@ async def test_admin_creates_user_without_returning_the_password(client):
             "full_name": "Asha Rep",
             "email": "asha@example.com",
             "password": VALID_PASSWORD,
-            "role": "SALES_REP",
+            "role": "SALESPERSON",
             "company_id": str(company_id),
             "team_id": str(team_id),
             "manager_id": str(manager_id),
@@ -148,7 +148,7 @@ async def test_admin_creates_user_without_returning_the_password(client):
     assert created.status_code == 201
     body = created.json()["data"]
     assert body["email"] == "asha@example.com"
-    assert body["roles"] == ["SALES_REP"]
+    assert body["roles"] == ["SALESPERSON"]
     assert body["company_id"] == str(company_id)
     assert body["team_id"] == str(team_id)
     assert body["manager_id"] == str(manager_id)
@@ -167,11 +167,11 @@ async def test_admin_creates_user_without_returning_the_password(client):
 
     updated = await client.patch(
         f"/api/v1/users/{body['id']}",
-        json={"role": "SALES_MANAGER", "team_id": None},
+        json={"role": "SALESPERSON", "team_id": None},
         headers=await csrf_headers(client),
     )
     assert updated.status_code == 200
-    assert updated.json()["data"]["roles"] == ["SALES_MANAGER"]
+    assert updated.json()["data"]["roles"] == ["SALESPERSON"]
     assert updated.json()["data"]["team_id"] is None
     assert updated.json()["data"]["manager_id"] == str(manager_id)
 
@@ -180,22 +180,21 @@ async def test_admin_creates_user_without_returning_the_password(client):
     assert me.json()["data"]["company_id"] == str(company_id)
     assert me.json()["data"]["team_id"] is None
     assert me.json()["data"]["manager_id"] == str(manager_id)
-    assert me.json()["data"]["roles"] == ["SALES_MANAGER"]
+    assert me.json()["data"]["roles"] == ["SALESPERSON"]
     assert me.json()["data"]["is_active"] is True
 
 
 async def test_company_admin_cannot_manage_another_company(client):
     north = _add_company("North")
     south = _add_company("South")
-    _add_member("north-admin@example.com", "ADMIN", company_id=north)
-    south_user = _add_member("south-rep@example.com", "SALES_REP", company_id=south)
+    _add_member("north-admin@example.com", "BUSINESS_OWNER", company_id=north)
+    south_user = _add_member("south-rep@example.com", "SALESPERSON", company_id=south)
     await _platform_admin(client)
     assert (await login(client, email="north-admin@example.com")).status_code == 200
 
+    # Business owners do not manage users in this product — only Super Admin does.
     listed = await client.get("/api/v1/users")
-    assert listed.status_code == 200
-    emails = {item["email"] for item in listed.json()["data"]["items"]}
-    assert emails == {"north-admin@example.com"}
+    assert listed.status_code == 403
 
     blocked = await client.post(
         "/api/v1/users",
@@ -203,7 +202,7 @@ async def test_company_admin_cannot_manage_another_company(client):
             "full_name": "Other Rep",
             "email": "other@example.com",
             "password": VALID_PASSWORD,
-            "role": "SALES_REP",
+            "role": "SALESPERSON",
             "company_id": str(south),
         },
         headers=await csrf_headers(client),
@@ -215,21 +214,7 @@ async def test_company_admin_cannot_manage_another_company(client):
         json={"is_active": False},
         headers=await csrf_headers(client),
     )
-    assert hidden.status_code == 404
-
-    created = await client.post(
-        "/api/v1/users",
-        json={
-            "full_name": "North Rep",
-            "email": "north-rep@example.com",
-            "password": VALID_PASSWORD,
-            "role": "sales_rep",
-        },
-        headers=await csrf_headers(client),
-    )
-    assert created.status_code == 201
-    assert created.json()["data"]["company_id"] == str(north)
-    assert created.json()["data"]["roles"] == ["SALES_REP"]
+    assert hidden.status_code == 403
 
 
 async def test_user_management_permissions_and_soft_delete(client):
@@ -239,7 +224,7 @@ async def test_user_management_permissions_and_soft_delete(client):
             "full_name": "Missing User",
             "email": "missing@example.com",
             "password": VALID_PASSWORD,
-            "role": "SALES_REP",
+            "role": "SALESPERSON",
         },
         headers=await csrf_headers(client),
     )
@@ -256,24 +241,17 @@ async def test_user_management_permissions_and_soft_delete(client):
     await _platform_admin(client)
     roles = await client.get("/api/v1/roles")
     granted = {role["name"]: {item["key"] for item in role["permissions"]} for role in roles.json()["data"]}
-    assert {"users.create", "users.delete", "users.update", "roles.assign", "leads.assign"} <= granted["ADMIN"]
-    assert granted["SALES_REP"] == {
+    assert {"features.read", "leads.read", "leads.assign"} <= granted["BUSINESS_OWNER"]
+    assert "users.create" not in granted["BUSINESS_OWNER"]
+    assert granted["SALESPERSON"] == {
         "features.read",
         "leads.read",
         "leads.create",
         "leads.update",
         "leads.delete",
     }
-    assert granted["SALES_MANAGER"] == {
-        "features.read",
-        "leads.read",
-        "leads.create",
-        "leads.update",
-        "leads.assign",
-        "leads.delete",
-    }
-    assert granted["VIEWER"] == {"features.read", "leads.read"}
     assert "users.read" not in granted["SALESPERSON"]
+    assert {"SUPER_ADMIN", "BUSINESS_OWNER", "SALESPERSON", "MARKETING"} <= set(granted)
 
     created = await client.post(
         "/api/v1/users",
@@ -281,7 +259,7 @@ async def test_user_management_permissions_and_soft_delete(client):
             "full_name": "Temporary Rep",
             "email": "temp@example.com",
             "password": VALID_PASSWORD,
-            "role": "VIEWER",
+            "role": "SALESPERSON",
         },
         headers=await csrf_headers(client),
     )
@@ -300,12 +278,12 @@ def test_access_scope_follows_role_and_team():
     other_company = _add_company("South")
     team_id = _add_team(company_id, "Field")
     other_team = _add_team(company_id, "Desk")
-    rep_id = _add_member("rep@example.com", "SALES_REP", company_id=company_id, team_id=team_id)
+    rep_id = _add_member("rep@example.com", "SALESPERSON", company_id=company_id, team_id=team_id)
     teammate_id = _add_member("mate@example.com", "SALESPERSON", company_id=company_id, team_id=team_id)
-    outsider_id = _add_member("desk@example.com", "SALES_REP", company_id=company_id, team_id=other_team)
-    manager_id = _add_member("lead@example.com", "SALES_MANAGER", company_id=company_id, team_id=team_id)
-    admin_id = _add_member("admin@example.com", "ADMIN", company_id=company_id)
-    viewer_id = _add_member("viewer@example.com", "VIEWER", company_id=company_id)
+    outsider_id = _add_member("desk@example.com", "SALESPERSON", company_id=company_id, team_id=other_team)
+    manager_id = _add_member("lead@example.com", "SALESPERSON", company_id=company_id, team_id=team_id)
+    admin_id = _add_member("admin@example.com", "BUSINESS_OWNER", company_id=company_id)
+    viewer_id = _add_member("viewer@example.com", "SALESPERSON", company_id=company_id)
     platform_id = _add_member("platform@example.com", "SUPER_ADMIN")
 
     db = SessionLocal()
@@ -314,7 +292,7 @@ def test_access_scope_follows_role_and_team():
         assert resolve_access_scope(users["rep@example.com"]) is AccessScope.OWN
         assert resolve_access_scope(users["mate@example.com"]) is AccessScope.OWN
         assert resolve_access_scope(users["viewer@example.com"]) is AccessScope.OWN
-        assert resolve_access_scope(users["lead@example.com"]) is AccessScope.TEAM
+        assert resolve_access_scope(users["lead@example.com"]) is AccessScope.OWN
         assert resolve_access_scope(users["admin@example.com"]) is AccessScope.ALL
         assert resolve_access_scope(users["platform@example.com"]) is AccessScope.ALL
 
@@ -322,10 +300,10 @@ def test_access_scope_follows_role_and_team():
         assert record_is_in_scope(rep_scope, owner_id=rep_id, company_id=company_id)
         assert not record_is_in_scope(rep_scope, owner_id=teammate_id, company_id=company_id)
 
-        team_scope = resolve_record_scope(db, users["lead@example.com"])
-        assert team_scope.owner_ids == {manager_id, rep_id, teammate_id}
-        assert record_is_in_scope(team_scope, owner_id=teammate_id, company_id=company_id)
-        assert not record_is_in_scope(team_scope, owner_id=outsider_id, company_id=company_id)
+        lead_scope = resolve_record_scope(db, users["lead@example.com"])
+        assert lead_scope.owner_ids == {manager_id}
+        assert record_is_in_scope(lead_scope, owner_id=manager_id, company_id=company_id)
+        assert not record_is_in_scope(lead_scope, owner_id=teammate_id, company_id=company_id)
 
         admin_scope = resolve_record_scope(db, users["admin@example.com"])
         assert admin_scope.owner_ids is None

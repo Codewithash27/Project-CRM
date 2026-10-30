@@ -3,10 +3,6 @@ const ROLE_KEYS: Record<string, string> = {
   BUSINESS_OWNER: 'access:roleBusinessOwner',
   MARKETING: 'access:roleMarketing',
   SALESPERSON: 'access:roleSalesperson',
-  ADMIN: 'access:roleAdmin',
-  SALES_MANAGER: 'access:roleSalesManager',
-  SALES_REP: 'access:roleSalesRep',
-  VIEWER: 'access:roleViewer',
 }
 
 export function roleLabel(role: string, translate: (key: string) => string) {

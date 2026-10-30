@@ -23,7 +23,7 @@ TEMPLATE_DESCRIPTION = {
     "SPACE-VIEW": "Interior and space planning. Site is required, and Expected Value is the opportunity.",
 }
 
-_VIEW_ROLES = frozenset({RoleName.SUPER_ADMIN, RoleName.BUSINESS_OWNER, RoleName.ADMIN})
+_VIEW_ROLES = frozenset({RoleName.SUPER_ADMIN, RoleName.BUSINESS_OWNER})
 
 
 def _role_names(user: User) -> set[str]:

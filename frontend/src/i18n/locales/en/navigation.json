@@ -49,14 +49,10 @@
     "campaigns": "Leads and won value by source, split by project. Read only."
   },
   "roleIntro": {
-    "SUPER_ADMIN": "You create businesses, projects, users, and roles. Lead notes stay with the business.",
-    "ADMIN": "You see this business the way its owner does: the team, the leads, and the numbers.",
+    "SUPER_ADMIN": "You create businesses, projects, users, and roles. Assign each project to a business so its owner can see it.",
     "BUSINESS_OWNER": "You assign salespeople to projects and watch every lead. You do not work the calls.",
-    "SALES_MANAGER": "You work the leads in the projects assigned to you.",
-    "SALES_REP": "You work the leads in the projects assigned to you.",
     "SALESPERSON": "You work the leads in the projects assigned to you.",
     "MARKETING": "You see campaign results only. Lead notes stay hidden.",
-    "VIEWER": "This account has no menu in the current workspace.",
     "default": "The menu shows the areas this account can open."
   }
 }

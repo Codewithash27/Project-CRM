@@ -16,7 +16,6 @@ describe('visibleNav', () => {
       'followUps',
       'kpis',
     ])
-    expect(ids(['SALES_REP'])).toEqual(ids(['SALESPERSON']))
   })
 
   it('gives a business owner the team and a view of every lead', () => {

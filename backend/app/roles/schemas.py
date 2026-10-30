@@ -86,10 +86,6 @@ SYSTEM_ROLES = frozenset(
         "BUSINESS_OWNER",
         "MARKETING",
         "SALESPERSON",
-        "ADMIN",
-        "SALES_MANAGER",
-        "SALES_REP",
-        "VIEWER",
     }
 )
 

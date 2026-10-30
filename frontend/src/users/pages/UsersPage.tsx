@@ -37,12 +37,8 @@ import { useAuth } from '../../store/auth-context'
 const ROLE_BADGE: Record<string, { bg: string; color: string }> = {
   SUPER_ADMIN: { bg: '#ede9fe', color: '#5b21b6' },
   BUSINESS_OWNER: { bg: '#dbeafe', color: '#1e40af' },
-  ADMIN: { bg: '#dbeafe', color: '#1e40af' },
   MARKETING: { bg: '#fef3c7', color: '#92400e' },
   SALESPERSON: { bg: '#e2e8f0', color: '#334155' },
-  SALES_REP: { bg: '#e2e8f0', color: '#334155' },
-  SALES_MANAGER: { bg: '#cffafe', color: '#155e75' },
-  VIEWER: { bg: '#f1f5f9', color: '#475569' },
 }
 
 function RoleBadge({ role, label }: { role: string; label: string }) {
@@ -83,6 +79,8 @@ export function UsersPage() {
   const [roleTarget, setRoleTarget] = useState<AccessUser | null>(null)
   const [selectedRole, setSelectedRole] = useState('SALESPERSON')
   const [statusTarget, setStatusTarget] = useState<AccessUser | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<AccessUser | null>(null)
+  const canDelete = Boolean(user?.permissions.includes('users.delete') || user?.roles.includes('SUPER_ADMIN'))
 
   const load = useCallback(async () => {
     setError('')
@@ -216,6 +214,23 @@ export function UsersPage() {
       await api.patch(`/api/v1/users/${statusTarget.id}/status`, { is_active: !statusTarget.is_active })
       setNotice(statusTarget.is_active ? t('access:userDeactivated') : t('access:userActivated'))
       setStatusTarget(null)
+      await load()
+    } catch (requestError) {
+      setError(messageForError(requestError, t))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function deleteUser() {
+    if (!deleteTarget) return
+    setBusyId(deleteTarget.id)
+    setNotice('')
+    setError('')
+    try {
+      await api.delete(`/api/v1/users/${deleteTarget.id}`)
+      setNotice(t('access:userDeleted'))
+      setDeleteTarget(null)
       await load()
     } catch (requestError) {
       setError(messageForError(requestError, t))
@@ -376,6 +391,17 @@ export function UsersPage() {
                       >
                         {account.is_active ? t('access:deactivate') : t('access:activate')}
                       </Button>
+                      {canDelete ? (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="error"
+                          disabled={isSelf || busyId === account.id}
+                          onClick={() => setDeleteTarget(account)}
+                        >
+                          {t('access:deleteUser')}
+                        </Button>
+                      ) : null}
                     </Stack>
                   </TableCell>
                 </TableRow>
@@ -508,6 +534,23 @@ export function UsersPage() {
           <Button onClick={() => setStatusTarget(null)}>{t('common:cancel')}</Button>
           <Button variant="contained" onClick={() => void saveStatus()}>
             {t('common:save')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} aria-labelledby="delete-user-title">
+        <DialogTitle id="delete-user-title">{t('access:confirmDeleteUser')}</DialogTitle>
+        <DialogContent>
+          {deleteTarget ? (
+            <Typography color="text.secondary">
+              {deleteTarget.full_name} · {deleteTarget.email}
+            </Typography>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTarget(null)}>{t('common:cancel')}</Button>
+          <Button color="error" variant="contained" onClick={() => void deleteUser()}>
+            {t('access:deleteUser')}
           </Button>
         </DialogActions>
       </Dialog>

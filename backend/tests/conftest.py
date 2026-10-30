@@ -83,8 +83,7 @@ def clean_database() -> None:
         connection.execute(
             text(
                 "DELETE FROM roles WHERE name NOT IN "
-                "('SUPER_ADMIN', 'BUSINESS_OWNER', 'MARKETING', 'SALESPERSON', "
-                "'ADMIN', 'SALES_MANAGER', 'SALES_REP', 'VIEWER')"
+                "('SUPER_ADMIN', 'BUSINESS_OWNER', 'MARKETING', 'SALESPERSON')"
             )
         )
     engine.dispose()

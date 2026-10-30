@@ -200,10 +200,10 @@ def update_user(
 @router.delete(
     "/{user_id}",
     response_model=ApiResponse[AccessUser],
-    summary="Deactivate a user",
+    summary="Delete a user",
     description=(
         "Soft-deletes an account by marking it inactive and revoking its sessions. "
-        "Requires users.delete. The account row is kept."
+        "Requires users.delete. The account row is kept for audit."
     ),
     responses=error_responses(401, 403, 404, 409),
 )
@@ -219,4 +219,4 @@ def delete_user(
         target_id=user_id,
         ip_address=client_ip(request),
     )
-    return ApiResponse(data=_access_user(db, updated), message="User deactivated.")
+    return ApiResponse(data=_access_user(db, updated), message="User deleted.")
