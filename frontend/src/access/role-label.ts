@@ -1,15 +1,15 @@
+const ROLE_KEYS: Record<string, string> = {
+  SUPER_ADMIN: 'access:roleSuperAdmin',
+  BUSINESS_OWNER: 'access:roleBusinessOwner',
+  MARKETING: 'access:roleMarketing',
+  SALESPERSON: 'access:roleSalesperson',
+  ADMIN: 'access:roleAdmin',
+  SALES_MANAGER: 'access:roleSalesManager',
+  SALES_REP: 'access:roleSalesRep',
+  VIEWER: 'access:roleViewer',
+}
+
 export function roleLabel(role: string, translate: (key: string) => string) {
-  if (role === 'SUPER_ADMIN') {
-    return translate('access:roleSuperAdmin')
-  }
-  if (role === 'BUSINESS_OWNER') {
-    return translate('access:roleBusinessOwner')
-  }
-  if (role === 'MARKETING') {
-    return translate('access:roleMarketing')
-  }
-  if (role === 'SALESPERSON') {
-    return translate('access:roleSalesperson')
-  }
-  return role
+  const key = ROLE_KEYS[role]
+  return key ? translate(key) : role
 }

@@ -1,5 +1,62 @@
 {
   "home": "Home",
   "accessManagement": "Access management",
-  "mainNavigation": "Main navigation"
+  "mainNavigation": "Main navigation",
+  "brand": "Aadi",
+  "product": "CRM",
+  "workspace": "Workspace",
+  "openMenu": "Open menu",
+  "closeMenu": "Close menu",
+  "collapseSidebar": "Collapse sidebar",
+  "expandSidebar": "Expand sidebar",
+  "accountMenu": "Account menu",
+  "skipToContent": "Skip to content",
+  "comingSoon": "Coming next",
+  "placeholderLead": "This stays in the menu so the workspace is complete. The working screen will be built here, one at a time.",
+  "homeGreeting": "Hello, {{name}}",
+  "homeLead": "Open any area from the side menu. Screens that are not ready yet keep their place until they are built.",
+  "sections": {
+    "menu": "Menu"
+  },
+  "items": {
+    "home": "Home",
+    "businesses": "Businesses",
+    "projects": "Projects",
+    "users": "Users",
+    "roles": "Roles",
+    "team": "Team",
+    "reminders": "Reminders",
+    "leads": "Leads",
+    "leadFields": "Lead Fields",
+    "pipeline": "Pipeline",
+    "followUps": "Follow-ups",
+    "kpis": "KPIs",
+    "campaigns": "Campaigns"
+  },
+  "hints": {
+    "home": "One card per project: leads, overdue follow-ups, won leads, and the salespeople on it.",
+    "businesses": "Create a business, see who is on it, and suspend or activate it.",
+    "projects": "A line of work with its own lead numbers, such as PRESCHOOL-0001.",
+    "users": "Create the Business Owner first, then the other people in that business.",
+    "roles": "See which role opens which menu, and create a custom role.",
+    "team": "Tick which salesperson works on which project, and move leads when the team changes.",
+    "reminders": "What is due today. Log Connected, No answer, Snooze, or Skip.",
+    "leads": "Enquiries for the projects you can open. A salesperson creates them. An owner reviews them.",
+    "leadFields": "Extra fields for one project. They show on Create lead and in the lead panel.",
+    "pipeline": "New, Contacted, In Progress, Qualified, Won, Lost, and Nurture.",
+    "followUps": "Open follow-ups with the plan step, due date, and priority.",
+    "kpis": "Won value, pipeline value, and counts by status and source.",
+    "campaigns": "Leads and won value by source, split by project. Read only."
+  },
+  "roleIntro": {
+    "SUPER_ADMIN": "You create businesses, projects, users, and roles. Lead notes stay with the business.",
+    "ADMIN": "You see this business the way its owner does: the team, the leads, and the numbers.",
+    "BUSINESS_OWNER": "You assign salespeople to projects and watch every lead. You do not work the calls.",
+    "SALES_MANAGER": "You work the leads in the projects assigned to you.",
+    "SALES_REP": "You work the leads in the projects assigned to you.",
+    "SALESPERSON": "You work the leads in the projects assigned to you.",
+    "MARKETING": "You see campaign results only. Lead notes stay hidden.",
+    "VIEWER": "This account has no menu in the current workspace.",
+    "default": "The menu shows the areas this account can open."
+  }
 }

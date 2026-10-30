@@ -1,12 +1,13 @@
 """Lead persistence. Tasks, activities, and deals are separate modules."""
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -27,27 +28,54 @@ CONTACTED = "contacted"
 QUALIFIED = "qualified"
 UNQUALIFIED = "unqualified"
 LOST = "lost"
-STATUSES = (NEW, CONTACTED, QUALIFIED, UNQUALIFIED, LOST)
+IN_PROGRESS = "In Progress"
+WON = "Won"
+NURTURE = "Nurture"
+STATUSES = (
+    NEW,
+    CONTACTED,
+    QUALIFIED,
+    UNQUALIFIED,
+    LOST,
+    "New",
+    "Contacted",
+    IN_PROGRESS,
+    "Qualified",
+    WON,
+    "Lost",
+    NURTURE,
+)
 
 LOW = "low"
 MEDIUM = "medium"
 HIGH = "high"
-PRIORITIES = (LOW, MEDIUM, HIGH)
+HOT = "Hot"
+WARM = "Warm"
+COLD = "Cold"
+PRIORITIES = (LOW, MEDIUM, HIGH, HOT, WARM, COLD)
 
 
 class Lead(Base):
     __tablename__ = "leads"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('new', 'contacted', 'qualified', 'unqualified', 'lost')",
+            "status IN ('new', 'contacted', 'qualified', 'unqualified', 'lost', "
+            "'New', 'Contacted', 'In Progress', 'Qualified', 'Won', 'Lost', 'Nurture')",
             name="ck_leads_status",
         ),
-        CheckConstraint("priority IN ('low', 'medium', 'high')", name="ck_leads_priority"),
+        CheckConstraint(
+            "priority IN ('low', 'medium', 'high', 'Hot', 'Warm', 'Cold')",
+            name="ck_leads_priority",
+        ),
         CheckConstraint(
             "expected_value IS NULL OR expected_value >= 0",
             name="ck_leads_expected_value",
         ),
-        UniqueConstraint("lead_number", name="uq_leads_lead_number"),
+        CheckConstraint(
+            "order_amount IS NULL OR order_amount >= 0",
+            name="ck_leads_order_amount",
+        ),
+        UniqueConstraint("company_id", "lead_number", name="uq_leads_company_lead_number"),
         Index("ix_leads_company_owner_status", "company_id", "owner_id", "status"),
         Index("ix_leads_mobile", "mobile"),
         Index("ix_leads_email", "email"),
@@ -62,7 +90,21 @@ class Lead(Base):
         ForeignKey("companies.id", ondelete="RESTRICT"),
         nullable=False,
     )
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("projects.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     lead_number: Mapped[str] = mapped_column(String(30), nullable=False)
+    enquiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    location: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    reference_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    call_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recruitment_stage: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    recruitment_outcome: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    site: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    order_amount: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
     full_name: Mapped[str] = mapped_column(String(120), nullable=False)
     mobile: Mapped[str] = mapped_column(String(20), nullable=False)
     alternate_mobile: Mapped[str | None] = mapped_column(String(20), nullable=True)

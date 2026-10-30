@@ -77,7 +77,7 @@ def clean_database() -> None:
         connection.execute(
             text(
                 "TRUNCATE TABLE audit_logs, password_reset_tokens, refresh_tokens, "
-                "user_roles, leads, users, teams, companies CASCADE"
+                "user_roles, project_members, leads, projects, users, teams, companies CASCADE"
             )
         )
     engine.dispose()
