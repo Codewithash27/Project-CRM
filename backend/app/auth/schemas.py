@@ -89,5 +89,8 @@ class UserProfile(BaseModel):
     preferred_language: str
     is_active: bool
     email_verified: bool
+    company_id: str | None
+    team_id: str | None
+    manager_id: str | None
     roles: list[str]
     permissions: list[str]

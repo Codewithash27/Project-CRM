@@ -18,6 +18,7 @@ from app.core.csrf import CSRFMiddleware
 from app.core.logging import configure_logging, log_event
 from app.core.security import dummy_password_hash
 from app.core.security_headers import SecurityHeadersMiddleware
+from app.leads.router import router as leads_router
 from app.permissions.router import router as permissions_router
 from app.roles.router import router as roles_router
 from app.users.router import router as users_router
@@ -63,7 +64,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Aadi CRM API",
         version="0.1.0",
-        summary="Authentication and role-based access API for Aadi CRM",
+        summary="Authentication, access management, and leads API for Aadi CRM",
         description=(
             "Cookie-based authentication foundation. Access and refresh tokens are HttpOnly cookies. "
             "Authorization uses database roles and permissions. "
@@ -123,6 +124,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
     app.include_router(users_router, prefix="/api/v1/users", tags=["Users"])
+    app.include_router(leads_router, prefix="/api/v1/leads", tags=["Leads"])
     app.include_router(roles_router, prefix="/api/v1/roles", tags=["Roles"])
     app.include_router(permissions_router, prefix="/api/v1/permissions", tags=["Permissions"])
     return app

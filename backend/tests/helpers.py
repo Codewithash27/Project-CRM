@@ -29,6 +29,7 @@ async def register_student(
     password: str = VALID_PASSWORD,
     full_name: str = "Student User",
     extra: dict | None = None,
+    approve: bool = True,
 ):
     payload = {
         "full_name": full_name,
@@ -39,11 +40,14 @@ async def register_student(
     }
     if extra:
         payload.update(extra)
-    return await client.post(
+    response = await client.post(
         "/api/v1/auth/register",
         json=payload,
         headers=await csrf_headers(client),
     )
+    if approve and response.status_code == 201:
+        set_active(response.json()["data"]["email"], True)
+    return response
 
 
 async def login(

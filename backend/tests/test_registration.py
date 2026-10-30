@@ -7,7 +7,9 @@ async def test_valid_registration_assigns_student(client):
     response = await register_student(client)
     assert response.status_code == 201
     body = response.json()
-    assert body["message"] == "Registration successful. Please sign in."
+    assert body["message"] == (
+        "Registration received. An administrator must approve this account before you can sign in."
+    )
     assert body["data"]["email"] == "student@example.com"
     assert body["data"]["roles"] == ["SALESPERSON"]
     assert "password" not in body["data"]

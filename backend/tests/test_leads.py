@@ -1,0 +1,498 @@
+"""Lead CRUD, ownership scope, assignment, and filters."""
+
+import uuid
+from datetime import UTC, datetime
+
+from app.core.database import SessionLocal
+from app.core.security import hash_password
+from app.leads.models import Lead
+from app.organization.models import ACTIVE, Company, Team
+from app.roles.models import UserRole
+from app.roles.service import get_role_by_name
+from app.users.models import User
+from sqlalchemy import select
+
+from tests.helpers import VALID_PASSWORD, csrf_headers, login, register_student
+
+FOLLOW_UP = "2026-11-02T10:30:00Z"
+LATER = "2026-12-01T10:30:00Z"
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _add_company(name: str) -> uuid.UUID:
+    db = SessionLocal()
+    try:
+        company = Company(name=name, status=ACTIVE, created_at=_now(), updated_at=_now())
+        db.add(company)
+        db.commit()
+        return company.id
+    finally:
+        db.close()
+
+
+def _add_team(company_id: uuid.UUID, name: str) -> uuid.UUID:
+    db = SessionLocal()
+    try:
+        team = Team(
+            company_id=company_id,
+            name=name,
+            status=ACTIVE,
+            created_at=_now(),
+            updated_at=_now(),
+        )
+        db.add(team)
+        db.commit()
+        return team.id
+    finally:
+        db.close()
+
+
+def _add_member(
+    email: str,
+    role_name: str,
+    *,
+    company_id: uuid.UUID | None = None,
+    team_id: uuid.UUID | None = None,
+) -> uuid.UUID:
+    db = SessionLocal()
+    try:
+        role = get_role_by_name(db, role_name)
+        assert role is not None
+        now = _now()
+        user = User(
+            email=email,
+            password_hash=hash_password(VALID_PASSWORD),
+            full_name=email.split("@", 1)[0],
+            preferred_language="en",
+            is_active=True,
+            email_verified=False,
+            session_version=1,
+            company_id=company_id,
+            team_id=team_id,
+            created_at=now,
+            updated_at=now,
+        )
+        user.user_roles.append(UserRole(role=role, created_at=now))
+        db.add(user)
+        db.commit()
+        return user.id
+    finally:
+        db.close()
+
+
+def _lead_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "full_name": "Asha Patil",
+        "mobile": "9876543210",
+        "email": "asha.lead@example.com",
+        "company_name": "Patil Traders",
+        "city": "Pune",
+        "lead_source": "Website",
+        "requirement": "CRM for a field team",
+        "expected_value": "1500.50",
+        "status": "new",
+        "priority": "high",
+        "next_followup_at": FOLLOW_UP,
+    }
+    payload.update(overrides)
+    return payload
+
+
+async def _login(client, email: str) -> None:
+    assert (await login(client, email=email)).status_code == 200
+
+
+async def test_sales_rep_crud_is_limited_to_own_leads(client):
+    company_id = _add_company("North")
+    team_id = _add_team(company_id, "Field")
+    rep_id = _add_member("rep@example.com", "SALES_REP", company_id=company_id, team_id=team_id)
+    mate_id = _add_member("mate@example.com", "SALES_REP", company_id=company_id, team_id=team_id)
+
+    anonymous = await client.post("/api/v1/leads", json=_lead_payload(), headers=await csrf_headers(client))
+    assert anonymous.status_code == 401
+
+    await _login(client, "rep@example.com")
+    created = await client.post("/api/v1/leads", json=_lead_payload(), headers=await csrf_headers(client))
+    assert created.status_code == 201
+    body = created.json()["data"]
+    assert body["lead_number"].startswith("LEAD-")
+    assert body["owner_id"] == str(rep_id)
+    assert body["created_by_id"] == str(rep_id)
+    assert body["company_id"] == str(company_id)
+    assert body["expected_value"] == "1500.50"
+    assert body["is_deleted"] is False
+    lead_id = body["id"]
+
+    listed = await client.get("/api/v1/leads")
+    assert listed.status_code == 200
+    assert listed.json()["data"]["total"] == 1
+    assert listed.json()["data"]["items"][0]["id"] == lead_id
+
+    blocked_owner = await client.post(
+        "/api/v1/leads",
+        json=_lead_payload(full_name="Other Lead", mobile="9876543211", owner_id=str(mate_id)),
+        headers=await csrf_headers(client),
+    )
+    assert blocked_owner.status_code == 403
+    assert blocked_owner.json()["error"]["code"] == "FORBIDDEN"
+
+    await _login(client, "mate@example.com")
+    hidden_list = await client.get("/api/v1/leads")
+    assert hidden_list.json()["data"]["total"] == 0
+    hidden = await client.get(f"/api/v1/leads/{lead_id}")
+    assert hidden.status_code == 404
+    hidden_edit = await client.patch(
+        f"/api/v1/leads/{lead_id}",
+        json={"city": "Mumbai"},
+        headers=await csrf_headers(client),
+    )
+    assert hidden_edit.status_code == 404
+
+    await _login(client, "rep@example.com")
+    updated = await client.patch(
+        f"/api/v1/leads/{lead_id}",
+        json={"status": "contacted", "city": "Nashik"},
+        headers=await csrf_headers(client),
+    )
+    assert updated.status_code == 200
+    assert updated.json()["data"]["status"] == "contacted"
+    assert updated.json()["data"]["city"] == "Nashik"
+    assert updated.json()["data"]["owner_id"] == str(rep_id)
+
+    reassigned = await client.patch(
+        f"/api/v1/leads/{lead_id}",
+        json={"owner_id": str(mate_id)},
+        headers=await csrf_headers(client),
+    )
+    assert reassigned.status_code == 403
+    assert (await client.get(f"/api/v1/leads/{lead_id}")).json()["data"]["owner_id"] == str(rep_id)
+
+    deleted = await client.delete(f"/api/v1/leads/{lead_id}", headers=await csrf_headers(client))
+    assert deleted.status_code == 200
+    assert deleted.json()["data"]["is_deleted"] is True
+    assert (await client.get(f"/api/v1/leads/{lead_id}")).status_code == 404
+    assert (await client.get("/api/v1/leads")).json()["data"]["total"] == 0
+
+
+async def test_manager_sees_team_leads_and_can_reassign_inside_the_team(client):
+    company_id = _add_company("North")
+    field_id = _add_team(company_id, "Field")
+    desk_id = _add_team(company_id, "Desk")
+    rep_id = _add_member("rep@example.com", "SALES_REP", company_id=company_id, team_id=field_id)
+    mate_id = _add_member("mate@example.com", "SALES_REP", company_id=company_id, team_id=field_id)
+    outsider_id = _add_member("desk@example.com", "SALES_REP", company_id=company_id, team_id=desk_id)
+    _add_member("lead@example.com", "SALES_MANAGER", company_id=company_id, team_id=field_id)
+
+    await _login(client, "rep@example.com")
+    own = await client.post(
+        "/api/v1/leads",
+        json=_lead_payload(full_name="Owned Lead", mobile="9000000001", email="owned@example.com"),
+        headers=await csrf_headers(client),
+    )
+    assert own.status_code == 201
+    own_id = own.json()["data"]["id"]
+
+    await _login(client, "desk@example.com")
+    outside = await client.post(
+        "/api/v1/leads",
+        json=_lead_payload(full_name="Desk Lead", mobile="9000000002", email="desk.lead@example.com"),
+        headers=await csrf_headers(client),
+    )
+    assert outside.status_code == 201
+    outside_id = outside.json()["data"]["id"]
+
+    await _login(client, "lead@example.com")
+    visible = await client.get("/api/v1/leads")
+    assert visible.status_code == 200
+    assert {item["id"] for item in visible.json()["data"]["items"]} == {own_id}
+    assert (await client.get(f"/api/v1/leads/{outside_id}")).status_code == 404
+
+    moved = await client.patch(
+        f"/api/v1/leads/{own_id}",
+        json={"owner_id": str(mate_id), "priority": "low"},
+        headers=await csrf_headers(client),
+    )
+    assert moved.status_code == 200
+    assert moved.json()["data"]["owner_id"] == str(mate_id)
+    assert moved.json()["data"]["priority"] == "low"
+    assert {item["id"] for item in (await client.get("/api/v1/leads")).json()["data"]["items"]} == {own_id}
+
+    refused = await client.patch(
+        f"/api/v1/leads/{own_id}",
+        json={"owner_id": str(outsider_id)},
+        headers=await csrf_headers(client),
+    )
+    assert refused.status_code == 422
+    assert refused.json()["error"]["details"][0]["field"] == "owner_id"
+    assert (await client.get(f"/api/v1/leads/{own_id}")).json()["data"]["owner_id"] == str(mate_id)
+
+    created = await client.post(
+        "/api/v1/leads",
+        json=_lead_payload(
+            full_name="Assigned Lead",
+            mobile="9000000003",
+            email="assigned@example.com",
+            owner_id=str(rep_id),
+        ),
+        headers=await csrf_headers(client),
+    )
+    assert created.status_code == 201
+    assert created.json()["data"]["owner_id"] == str(rep_id)
+    assert created.json()["data"]["company_id"] == str(company_id)
+
+
+async def test_admin_is_limited_to_one_company_and_soft_delete_hides_the_lead(client):
+    north = _add_company("North")
+    south = _add_company("South")
+    _add_member("north-admin@example.com", "ADMIN", company_id=north)
+    south_rep = _add_member("south-rep@example.com", "SALES_REP", company_id=south)
+    north_rep = _add_member("north-rep@example.com", "SALES_REP", company_id=north)
+
+    await _login(client, "south-rep@example.com")
+    south_lead = await client.post(
+        "/api/v1/leads",
+        json=_lead_payload(full_name="South Lead", mobile="9000000011", email="south.lead@example.com"),
+        headers=await csrf_headers(client),
+    )
+    assert south_lead.status_code == 201
+    south_id = south_lead.json()["data"]["id"]
+
+    await _login(client, "north-admin@example.com")
+    assert (await client.get("/api/v1/leads")).json()["data"]["total"] == 0
+    assert (await client.get(f"/api/v1/leads/{south_id}")).status_code == 404
+    other_company = await client.post(
+        "/api/v1/leads",
+        json=_lead_payload(company_id=str(south), owner_id=str(south_rep)),
+        headers=await csrf_headers(client),
+    )
+    assert other_company.status_code == 403
+
+    created = await client.post(
+        "/api/v1/leads",
+        json=_lead_payload(
+            full_name="North Lead",
+            mobile="9000000012",
+            email="north.lead@example.com",
+            owner_id=str(north_rep),
+        ),
+        headers=await csrf_headers(client),
+    )
+    assert created.status_code == 201
+    lead_id = created.json()["data"]["id"]
+    assert created.json()["data"]["company_id"] == str(north)
+    assert created.json()["data"]["owner_id"] == str(north_rep)
+
+    deleted = await client.delete(f"/api/v1/leads/{lead_id}", headers=await csrf_headers(client))
+    assert deleted.status_code == 200
+    assert deleted.json()["data"]["is_deleted"] is True
+    db = SessionLocal()
+    try:
+        stored = db.get(Lead, uuid.UUID(lead_id))
+        assert stored is not None
+        assert stored.is_deleted is True
+    finally:
+        db.close()
+    assert (await client.get(f"/api/v1/leads/{lead_id}")).status_code == 404
+
+
+async def test_platform_admin_sees_every_company(client):
+    north = _add_company("North")
+    south = _add_company("South")
+    north_rep = _add_member("north-rep@example.com", "SALES_REP", company_id=north)
+    south_rep = _add_member("south-rep@example.com", "SALES_REP", company_id=south)
+    _add_member("root@example.com", "SUPER_ADMIN")
+
+    await _login(client, "north-rep@example.com")
+    north_lead = await client.post(
+        "/api/v1/leads",
+        json=_lead_payload(full_name="North Lead", mobile="9000000021"),
+        headers=await csrf_headers(client),
+    )
+    await _login(client, "south-rep@example.com")
+    south_lead = await client.post(
+        "/api/v1/leads",
+        json=_lead_payload(full_name="South Lead", mobile="9000000022", email="south2@example.com"),
+        headers=await csrf_headers(client),
+    )
+    await _login(client, "root@example.com")
+    listed = await client.get("/api/v1/leads")
+    assert listed.status_code == 200
+    assert {item["id"] for item in listed.json()["data"]["items"]} == {
+        north_lead.json()["data"]["id"],
+        south_lead.json()["data"]["id"],
+    }
+
+    missing_owner = await client.post(
+        "/api/v1/leads",
+        json=_lead_payload(company_id=str(north), full_name="Needs Owner", mobile="9000000023"),
+        headers=await csrf_headers(client),
+    )
+    assert missing_owner.status_code == 422
+    assert missing_owner.json()["error"]["details"][0]["field"] == "owner_id"
+
+    created = await client.post(
+        "/api/v1/leads",
+        json=_lead_payload(
+            company_id=str(south),
+            owner_id=str(south_rep),
+            full_name="Platform Lead",
+            mobile="9000000024",
+            email="platform.lead@example.com",
+        ),
+        headers=await csrf_headers(client),
+    )
+    assert created.status_code == 201
+    assert created.json()["data"]["company_id"] == str(south)
+    assert created.json()["data"]["owner_id"] == str(south_rep)
+    assert north_rep != south_rep
+
+
+async def test_viewer_and_salesperson_cannot_change_leads(client):
+    company_id = _add_company("North")
+    viewer_id = _add_member("viewer@example.com", "VIEWER", company_id=company_id)
+    _add_member("admin@example.com", "ADMIN", company_id=company_id)
+    assert (await register_student(client, email="person@example.com", full_name="New Person")).status_code == 201
+
+    await _login(client, "admin@example.com")
+    created = await client.post(
+        "/api/v1/leads",
+        json=_lead_payload(owner_id=str(viewer_id), full_name="Readable Lead", mobile="9000000031"),
+        headers=await csrf_headers(client),
+    )
+    assert created.status_code == 201
+    lead_id = created.json()["data"]["id"]
+
+    await _login(client, "viewer@example.com")
+    listed = await client.get("/api/v1/leads")
+    assert listed.status_code == 200
+    assert [item["id"] for item in listed.json()["data"]["items"]] == [lead_id]
+    forbidden = await client.post("/api/v1/leads", json=_lead_payload(), headers=await csrf_headers(client))
+    assert forbidden.status_code == 403
+    assert (
+        await client.patch(
+            f"/api/v1/leads/{lead_id}",
+            json={"city": "Mumbai"},
+            headers=await csrf_headers(client),
+        )
+    ).status_code == 403
+    assert (await client.delete(f"/api/v1/leads/{lead_id}", headers=await csrf_headers(client))).status_code == 403
+
+    await _login(client, "person@example.com")
+    assert (await client.get("/api/v1/leads")).status_code == 403
+
+
+async def test_lead_filters_and_pagination(client):
+    company_id = _add_company("North")
+    rep_id = _add_member("rep@example.com", "SALES_REP", company_id=company_id)
+    mate_id = _add_member("mate@example.com", "SALES_REP", company_id=company_id)
+    _add_member("lead@example.com", "SALES_MANAGER", company_id=company_id, team_id=_add_team(company_id, "Field"))
+    db = SessionLocal()
+    try:
+        for user_id in (rep_id, mate_id):
+            user = db.get(User, user_id)
+            assert user is not None
+            user.team_id = db.scalar(select(Team.id).where(Team.company_id == company_id))
+        db.commit()
+    finally:
+        db.close()
+
+    await _login(client, "rep@example.com")
+    first = await client.post(
+        "/api/v1/leads",
+        json=_lead_payload(
+            full_name="100% Ready",
+            mobile="9111111111",
+            email="ready@example.com",
+            lead_source="Website",
+            status="new",
+            priority="high",
+            next_followup_at=FOLLOW_UP,
+        ),
+        headers=await csrf_headers(client),
+    )
+    assert first.status_code == 201
+    await _login(client, "mate@example.com")
+    second = await client.post(
+        "/api/v1/leads",
+        json=_lead_payload(
+            full_name="Later Call",
+            mobile="9222222222",
+            email="later@example.com",
+            lead_source="Referral",
+            status="qualified",
+            priority="low",
+            next_followup_at=LATER,
+        ),
+        headers=await csrf_headers(client),
+    )
+    assert second.status_code == 201
+    first_id = first.json()["data"]["id"]
+    second_id = second.json()["data"]["id"]
+
+    await _login(client, "lead@example.com")
+    by_name = await client.get("/api/v1/leads", params={"search": "100%"})
+    assert [item["id"] for item in by_name.json()["data"]["items"]] == [first_id]
+    by_mobile = await client.get("/api/v1/leads", params={"search": "92222"})
+    assert [item["id"] for item in by_mobile.json()["data"]["items"]] == [second_id]
+    by_email = await client.get("/api/v1/leads", params={"search": "ready@example.com"})
+    assert [item["id"] for item in by_email.json()["data"]["items"]] == [first_id]
+    by_status = await client.get("/api/v1/leads", params={"status": "qualified"})
+    assert [item["id"] for item in by_status.json()["data"]["items"]] == [second_id]
+    by_owner = await client.get("/api/v1/leads", params={"owner_id": str(rep_id)})
+    assert [item["id"] for item in by_owner.json()["data"]["items"]] == [first_id]
+    by_source = await client.get("/api/v1/leads", params={"source": "Referral"})
+    assert [item["id"] for item in by_source.json()["data"]["items"]] == [second_id]
+    by_priority = await client.get("/api/v1/leads", params={"priority": "high"})
+    assert [item["id"] for item in by_priority.json()["data"]["items"]] == [first_id]
+    by_day = await client.get("/api/v1/leads", params={"next_followup_at": "2026-11-02"})
+    assert [item["id"] for item in by_day.json()["data"]["items"]] == [first_id]
+
+    page_one = await client.get("/api/v1/leads", params={"limit": 1, "offset": 0})
+    page_two = await client.get("/api/v1/leads", params={"limit": 1, "offset": 1})
+    assert page_one.json()["data"]["total"] == 2
+    assert page_two.json()["data"]["total"] == 2
+    assert {page_one.json()["data"]["items"][0]["id"], page_two.json()["data"]["items"][0]["id"]} == {
+        first_id,
+        second_id,
+    }
+
+    await _login(client, "rep@example.com")
+    assert (await client.get("/api/v1/leads", params={"owner_id": str(mate_id)})).json()["data"]["total"] == 0
+
+
+async def test_lead_validation_rejects_incomplete_or_unknown_values(client):
+    company_id = _add_company("North")
+    _add_member("rep@example.com", "SALES_REP", company_id=company_id)
+    await _login(client, "rep@example.com")
+    headers = await csrf_headers(client)
+
+    missing = await client.post("/api/v1/leads", json={"full_name": "Asha Patil"}, headers=headers)
+    assert missing.status_code == 422
+
+    bad_mobile = await client.post(
+        "/api/v1/leads",
+        json=_lead_payload(mobile="123"),
+        headers=headers,
+    )
+    assert bad_mobile.status_code == 422
+    assert bad_mobile.json()["error"]["details"][0]["field"] == "mobile"
+
+    bad_status = await client.post(
+        "/api/v1/leads",
+        json=_lead_payload(status="won"),
+        headers=headers,
+    )
+    assert bad_status.status_code == 422
+
+    no_csrf = await client.post("/api/v1/leads", json=_lead_payload())
+    assert no_csrf.status_code == 403
+    assert no_csrf.json()["error"]["code"] == "CSRF_VALIDATION_FAILED"
+
+    db = SessionLocal()
+    try:
+        assert db.scalar(select(Lead.id)) is None
+    finally:
+        db.close()

@@ -25,6 +25,9 @@ const student: UserProfile = {
   preferred_language: 'en',
   is_active: true,
   email_verified: false,
+  company_id: null,
+  team_id: null,
+  manager_id: null,
   roles: ['SALESPERSON'],
   permissions: ['features.read'],
 }

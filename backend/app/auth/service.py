@@ -111,7 +111,7 @@ def register_user(db: Session, payload: RegisterRequest) -> User:
         password_hash=hash_password(payload.password),
         full_name=payload.full_name,
         preferred_language=payload.preferred_language,
-        is_active=True,
+        is_active=False,
         email_verified=False,
         session_version=1,
         created_at=now,
