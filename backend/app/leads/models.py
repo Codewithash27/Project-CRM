@@ -72,10 +72,6 @@ class Lead(Base):
             name="ck_leads_priority",
         ),
         CheckConstraint(
-            "plan_step IN ('Day 1', 'Day 3', 'Day 7', 'Day 21', '3-month review', 'Custom')",
-            name="ck_leads_plan_step",
-        ),
-        CheckConstraint(
             "expected_value IS NULL OR expected_value >= 0",
             name="ck_leads_expected_value",
         ),

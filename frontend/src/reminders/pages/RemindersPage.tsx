@@ -1,5 +1,8 @@
+import AddOutlinedIcon from '@mui/icons-material/AddOutlined'
 import CheckIcon from '@mui/icons-material/Check'
 import MoreVertIcon from '@mui/icons-material/MoreVert'
+import PhoneInTalkOutlinedIcon from '@mui/icons-material/PhoneInTalkOutlined'
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
 import TodayOutlinedIcon from '@mui/icons-material/TodayOutlined'
 import {
   Box,
@@ -16,6 +19,7 @@ import {
   MenuItem,
   Stack,
   TextField,
+  Tooltip,
   Typography,
   useMediaQuery,
 } from '@mui/material'
@@ -25,6 +29,12 @@ import { Link as RouterLink } from 'react-router-dom'
 
 import { ErrorAlert } from '../../components/common/ErrorAlert'
 import { LoadingScreen } from '../../components/common/LoadingScreen'
+import { FollowupPlanSettingsDialog } from '../../followup-plan/FollowupPlanSettingsDialog'
+import {
+  CUSTOM_STEP,
+  FollowupPlanStep,
+  loadFollowupPlan,
+} from '../../followup-plan/plan'
 import {
   addDaysIso,
   dateInputToIsoNoon,
@@ -39,11 +49,11 @@ import {
   LeadPriority,
   LeadProjectOption,
   PRIORITY_LABEL,
-  PRIORITY_TONE,
 } from '../../leads/types'
 import { ApiError } from '../../services/api/errors'
 import { api } from '../../services/api/client'
 import { useAuth } from '../../store/auth-context'
+import { ReminderLeadDrawer } from '../components/ReminderLeadDrawer'
 
 type WhenFilter = 'ALL' | 'o' | 't' | 'u'
 type SortBy = 'time' | 'pri' | 'name'
@@ -61,28 +71,19 @@ const WHEN_CHIP: Record<Exclude<FollowWhen, 'ALL'>, { label: string; bg: string;
   u: { label: 'Upcoming', bg: '#e0ecff', color: '#1d4ed8' },
 }
 
-const DAY_CHIP = { bg: '#ede9fe', color: '#5b21b6' }
+const PRI_TONE: Record<LeadPriority, { bg: string; color: string }> = {
+  high: { bg: '#fee2e2', color: '#b91c1c' },
+  medium: { bg: '#fef3c7', color: '#92400e' },
+  low: { bg: '#dbeafe', color: '#1e40af' },
+}
+
 const PRI_RANK: Record<LeadPriority, number> = { high: 0, medium: 1, low: 2 }
-const AVATAR_COLORS = ['#dbeafe', '#fce7f3', '#d1fae5', '#ffedd5', '#e0e7ff', '#fef3c7']
+const STEP_PALETTE = ['#ec4899', '#8b5cf6', '#10b981', '#f59e0b', '#3b82f6', '#64748b', '#0ea5e9', '#f43f5e']
 
-function initials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return '?'
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return `${parts[0][0] ?? ''}${parts[1][0] ?? ''}`.toUpperCase()
-}
-
-function avatarBg(name: string) {
-  let hash = 0
-  for (let i = 0; i < name.length; i += 1) hash = (hash + name.charCodeAt(i) * (i + 1)) % AVATAR_COLORS.length
-  return AVATAR_COLORS[hash] ?? AVATAR_COLORS[0]
-}
-
-function dayAgeLabel(createdAt: string) {
-  const created = new Date(createdAt)
-  if (Number.isNaN(created.getTime())) return null
-  const days = Math.max(0, Math.floor((Date.now() - created.getTime()) / 86400000))
-  return `Day ${Math.max(1, days + 1)}`
+function stepColor(label: string, plan: FollowupPlanStep[]) {
+  const index = plan.findIndex((step) => step.label === label)
+  if (label === CUSTOM_STEP) return STEP_PALETTE[5]
+  return STEP_PALETTE[index >= 0 ? index % STEP_PALETTE.length : 0]
 }
 
 export function RemindersPage() {
@@ -94,6 +95,8 @@ export function RemindersPage() {
 
   const [leads, setLeads] = useState<Lead[]>([])
   const [projects, setProjects] = useState<LeadProjectOption[]>([])
+  const [plan, setPlan] = useState<FollowupPlanStep[]>(() => loadFollowupPlan(user?.company_id))
+  const [planOpen, setPlanOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -116,6 +119,11 @@ export function RemindersPage() {
   const [menuLead, setMenuLead] = useState<Lead | null>(null)
   const [rescheduleLead, setRescheduleLead] = useState<Lead | null>(null)
   const [rescheduleDate, setRescheduleDate] = useState(() => isoToDateInput(addDaysIso(null, 1)))
+  const [drawerLeadId, setDrawerLeadId] = useState<string | null>(null)
+
+  useEffect(() => {
+    setPlan(loadFollowupPlan(user?.company_id))
+  }, [user?.company_id])
 
   const loadProjects = useCallback(async () => {
     const result = await api.get<{ items: LeadProjectOption[] }>('/api/v1/projects')
@@ -138,7 +146,7 @@ export function RemindersPage() {
 
   useEffect(() => {
     void loadProjects().catch(() => {
-      /* projects dropdown stays empty; reminders can still load */
+      /* projects dropdown stays empty */
     })
   }, [loadProjects])
 
@@ -173,6 +181,7 @@ export function RemindersPage() {
           lead.city,
           lead.company_name,
           lead.project_name,
+          lead.plan_step,
         ]
           .filter(Boolean)
           .join(' ')
@@ -194,19 +203,11 @@ export function RemindersPage() {
     return rows
   }, [priority, scopedFollowup, search, sort, when])
 
-  const counts = useMemo(() => {
-    const base = { ALL: scopedFollowup.length, o: 0, t: 0, u: 0 }
-    for (const lead of scopedFollowup) {
-      const bucket = followWhen(lead.next_followup_at)
-      if (bucket) base[bucket] += 1
-    }
-    return base
-  }, [scopedFollowup])
-
-  const perPage = 8
+  const perPage = 21
   const pages = Math.max(1, Math.ceil(filtered.length / perPage))
   const pageSafe = Math.min(page, pages)
   const pageRows = filtered.slice((pageSafe - 1) * perPage, pageSafe * perPage)
+  const showPagination = filtered.length > perPage
 
   useEffect(() => {
     setPage(1)
@@ -236,6 +237,24 @@ export function RemindersPage() {
     setMenuAnchor(null)
     setMenuLead(null)
   }
+
+  function openLead(lead: Lead) {
+    closeMenu()
+    setDrawerLeadId(lead.id)
+  }
+
+  const drawerLead = useMemo(
+    () => (drawerLeadId ? leads.find((item) => item.id === drawerLeadId) ?? null : null),
+    [drawerLeadId, leads],
+  )
+
+  const onDrawerChanged = useCallback(
+    async (message: string) => {
+      setNotice(message)
+      await load()
+    },
+    [load],
+  )
 
   async function snoozeLead(lead: Lead) {
     closeMenu()
@@ -307,7 +326,8 @@ export function RemindersPage() {
       {
         status: 'contacted',
         requirement,
-        next_followup_at: addDaysIso(null, 3),
+        next_followup_at: addDaysIso(null, plan[1]?.gapDays ?? 3),
+        plan_step: plan[1]?.label ?? plan[0]?.label ?? 'Day 1',
       },
       `Call done for ${callLead.full_name}.`,
     )
@@ -326,7 +346,7 @@ export function RemindersPage() {
       setError('Pick a valid due date.')
       return
     }
-    const body: Record<string, unknown> = { next_followup_at: iso }
+    const body: Record<string, unknown> = { next_followup_at: iso, plan_step: CUSTOM_STEP }
     if (addPriority) body.priority = addPriority
     if (addNotes.trim()) {
       const lead = leads.find((item) => item.id === addLeadId)
@@ -347,7 +367,6 @@ export function RemindersPage() {
   if (!loading && leads.length === 0 && !projectId) {
     return (
       <Stack spacing={2}>
-        <Typography variant="h1">Reminders</Typography>
         {error ? <ErrorAlert message={error} /> : null}
         <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'background.paper', p: 3 }}>
           <Typography sx={{ mb: 1.5 }}>No leads yet.</Typography>
@@ -362,70 +381,71 @@ export function RemindersPage() {
   }
 
   return (
-    <Stack spacing={2}>
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        spacing={2}
-        sx={{ alignItems: { sm: 'flex-start' }, justifyContent: 'space-between' }}
-      >
-        <Stack spacing={0.5}>
-          <Typography variant="h1">Reminders</Typography>
-          <Typography color="text.secondary">
-            Never miss an important follow-up. Stay on track, close more deals.
-          </Typography>
-        </Stack>
+    <Stack spacing={1.25}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+        <Typography variant="h1" sx={{ flex: 1 }}>
+          Reminders
+        </Typography>
+        <Tooltip title="Customize follow-up plan days">
+          <IconButton
+            size="small"
+            aria-label="Customize follow-up plan days"
+            onClick={() => setPlanOpen(true)}
+            sx={{
+              width: 32,
+              height: 32,
+              border: '1px solid #dbe3ee',
+              borderRadius: '8px',
+              bgcolor: '#fff',
+            }}
+          >
+            <SettingsOutlinedIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        </Tooltip>
         {canUpdate ? (
-          <Button variant="contained" onClick={() => setAddOpen(true)} sx={{ flexShrink: 0 }}>
-            + Add reminder
-          </Button>
+          <Tooltip title="Add reminder">
+            <IconButton
+              size="small"
+              color="primary"
+              aria-label="Add reminder"
+              onClick={() => setAddOpen(true)}
+              sx={{
+                bgcolor: 'primary.main',
+                color: '#fff',
+                width: 32,
+                height: 32,
+                borderRadius: '8px',
+                boxShadow: '0 4px 10px rgba(29,78,216,.2)',
+                '&:hover': { bgcolor: 'primary.dark' },
+              }}
+            >
+              <AddOutlinedIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Tooltip>
         ) : null}
       </Stack>
 
       {error ? <ErrorAlert message={error} /> : null}
       {notice ? (
-        <Box sx={{ bgcolor: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', borderRadius: 2, px: 1.5, py: 1 }}>
+        <Box sx={{ bgcolor: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', borderRadius: '12px', px: 1.75, py: 1.25 }}>
           <Typography variant="body2">{notice}</Typography>
         </Box>
       ) : null}
 
-      <Stack direction="row" spacing={1} sx={{ overflowX: 'auto', pb: 0.5 }}>
-        {(['ALL', 'o', 't', 'u'] as WhenFilter[]).map((key) => {
-          const on = when === key
-          const tone = key === 'ALL' ? null : WHEN_CHIP[key]
-          return (
-            <Chip
-              key={key}
-              clickable
-              label={`${key === 'ALL' ? 'All' : tone?.label} (${counts[key]})`}
-              onClick={() => setWhen(key)}
-              sx={{
-                height: 36,
-                px: 0.5,
-                fontWeight: 700,
-                bgcolor: on ? (tone?.color ?? 'primary.main') : tone ? `${tone.bg}` : '#fff',
-                color: on ? '#fff' : tone?.color ?? 'text.primary',
-                border: '1px solid',
-                borderColor: on ? (tone?.color ?? 'primary.main') : tone?.bg ?? 'divider',
-                '&:hover': { opacity: 0.92 },
-              }}
-            />
-          )
-        })}
-      </Stack>
-
       <Box
         sx={{
           display: 'grid',
-          gap: 1.25,
-          gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1.1fr 0.9fr 0.8fr 1.4fr' },
+          gap: 1.5,
+          gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1.2fr 1fr 1fr 1fr' },
         }}
       >
         <TextField
-          select
-          label="Project"
-          value={projectId}
-          onChange={(event) => setProjectId(event.target.value)}
-        >
+          label="Search"
+          placeholder="Search reminder, lead, mobile"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <TextField select label="Project" value={projectId} onChange={(event) => setProjectId(event.target.value)}>
           <MenuItem value="">All projects</MenuItem>
           {projects.map((project) => (
             <MenuItem key={project.id} value={project.id}>
@@ -433,7 +453,12 @@ export function RemindersPage() {
             </MenuItem>
           ))}
         </TextField>
-        <TextField select label="When" value={when} onChange={(event) => setWhen(event.target.value as WhenFilter)}>
+        <TextField
+          select
+          label="When"
+          value={when}
+          onChange={(event) => setWhen(event.target.value as WhenFilter)}
+        >
           <MenuItem value="ALL">All dates</MenuItem>
           <MenuItem value="o">Overdue</MenuItem>
           <MenuItem value="t">Due today</MenuItem>
@@ -445,15 +470,16 @@ export function RemindersPage() {
           <MenuItem value="medium">Warm</MenuItem>
           <MenuItem value="low">Cold</MenuItem>
         </TextField>
-        <TextField
-          label="Search"
-          placeholder="Search reminder, lead, mobile"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
       </Box>
 
-      <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'background.paper', overflow: 'hidden' }}>
+      <Box
+        sx={{
+          border: '1px solid #dbe3ee',
+          borderRadius: '16px',
+          bgcolor: 'background.paper',
+          overflow: 'hidden',
+        }}
+      >
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={1}
@@ -461,38 +487,42 @@ export function RemindersPage() {
             px: 2,
             py: 1.5,
             alignItems: { sm: 'center' },
-            background: 'linear-gradient(110deg,#eef2ff,#f8fafc 55%,#ecfdf5)',
-            borderBottom: '1px solid',
-            borderColor: 'divider',
+            background: 'linear-gradient(180deg,#eaf1ff,#f6f9ff)',
+            borderBottom: '1px solid #dbe3ee',
           }}
         >
-          <Typography fontWeight={700} sx={{ flex: 1 }}>
+          <Typography fontWeight={700} sx={{ flex: 1, fontSize: 16 }}>
             {WHEN_LABEL[when]} ({filtered.length})
-            {projectId
-              ? ` · ${projects.find((project) => project.id === projectId)?.name ?? 'Project'}`
-              : ''}
           </Typography>
-          <TextField
-            select
-            size="small"
-            label="Sort by"
-            value={sort}
-            onChange={(event) => setSort(event.target.value as SortBy)}
-            sx={{ minWidth: 140 }}
-          >
-            <MenuItem value="time">Due date</MenuItem>
-            <MenuItem value="pri">Priority</MenuItem>
-            <MenuItem value="name">Name</MenuItem>
-          </TextField>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <Typography variant="caption" color="text.secondary">
+              Sort by
+            </Typography>
+            <TextField
+              select
+              size="small"
+              value={sort}
+              onChange={(event) => setSort(event.target.value as SortBy)}
+              sx={{
+                minWidth: 120,
+                '& .MuiOutlinedInput-notchedOutline': { border: 0 },
+                '& .MuiSelect-select': { fontWeight: 700, py: 0.5 },
+              }}
+            >
+              <MenuItem value="time">Due date</MenuItem>
+              <MenuItem value="pri">Priority</MenuItem>
+              <MenuItem value="name">Name</MenuItem>
+            </TextField>
+          </Stack>
         </Stack>
 
         {selected.length > 0 && canUpdate ? (
           <Stack
             direction="row"
             spacing={1}
-            sx={{ px: 2, py: 1, bgcolor: '#eff6ff', borderBottom: '1px solid', borderColor: 'divider', alignItems: 'center' }}
+            sx={{ px: 2, py: 1, bgcolor: '#eff6ff', borderBottom: '1px solid #dbe3ee', alignItems: 'center' }}
           >
-            <Typography variant="body2" fontWeight={600}>
+            <Typography variant="body2" fontWeight={700}>
               {selected.length} selected
             </Typography>
             <Button size="small" disabled={saving} onClick={() => void snoozeSelected()}>
@@ -506,36 +536,35 @@ export function RemindersPage() {
 
         {pageRows.length === 0 ? (
           <Box sx={{ p: 4, textAlign: 'center' }}>
-            <Typography fontWeight={600}>Nothing here</Typography>
-            <Typography color="text.secondary">
-              {projectId
-                ? 'No reminders for this project with these filters.'
-                : 'No reminders match these filters.'}
-            </Typography>
+            <Typography fontWeight={700}>Nothing here</Typography>
+            <Typography color="text.secondary">No reminders match these filters.</Typography>
           </Box>
         ) : (
           pageRows.map((lead) => {
             const bucket = followWhen(lead.next_followup_at) ?? 'u'
             const tone = WHEN_CHIP[bucket]
-            const priorityKey: LeadPriority = lead.priority in PRIORITY_TONE ? lead.priority : 'medium'
-            const pri = PRIORITY_TONE[priorityKey]
+            const priorityKey: LeadPriority = lead.priority in PRI_TONE ? lead.priority : 'medium'
+            const pri = PRI_TONE[priorityKey]
             const on = selected.includes(lead.id)
-            const day = dayAgeLabel(lead.created_at)
+            const step = lead.plan_step || plan[0]?.label || 'Day 1'
+            const color = stepColor(step, plan)
             const projectBit = lead.project_name ? ` · ${lead.project_name}` : ''
             return (
               <Box
                 key={lead.id}
                 sx={{
                   display: 'grid',
-                  gridTemplateColumns: { xs: '28px 1fr', md: '28px minmax(0,2.4fr) auto auto' },
-                  gap: { xs: 1, md: 1.5 },
-                  alignItems: 'center',
+                  gridTemplateColumns: {
+                    xs: '22px minmax(0,1fr)',
+                    md: '22px minmax(0,2.4fr) minmax(126px,1fr) minmax(62px,.5fr) minmax(96px,.9fr) minmax(92px,.8fr) 78px',
+                  },
+                  gap: { xs: '8px 10px', md: 1.5 },
+                  alignItems: { xs: 'start', md: 'center' },
                   px: 2,
                   py: 1.5,
-                  borderBottom: '1px solid',
-                  borderColor: 'divider',
+                  borderBottom: '1px solid #edf1f7',
                   bgcolor: on ? '#eff6ff' : 'transparent',
-                  '&:hover': { bgcolor: on ? '#eff6ff' : '#f8fafc' },
+                  '&:hover': { bgcolor: on ? '#eff6ff' : '#f8fbff' },
                 }}
               >
                 <Checkbox
@@ -544,8 +573,15 @@ export function RemindersPage() {
                   disabled={!canUpdate}
                   onChange={() => toggleSelect(lead.id)}
                   inputProps={{ 'aria-label': `Select ${lead.full_name}` }}
+                  sx={{ p: 0.25 }}
                 />
-                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', minWidth: 0 }}>
+
+                <Stack
+                  direction="row"
+                  spacing={1.5}
+                  onClick={() => openLead(lead)}
+                  sx={{ alignItems: 'center', minWidth: 0, cursor: 'pointer' }}
+                >
                   <Box
                     sx={{
                       width: 44,
@@ -554,13 +590,11 @@ export function RemindersPage() {
                       flexShrink: 0,
                       display: 'grid',
                       placeItems: 'center',
-                      bgcolor: avatarBg(lead.full_name),
-                      color: '#1e3a8a',
-                      fontWeight: 800,
-                      fontSize: '0.8rem',
+                      bgcolor: `color-mix(in srgb, ${color} 14%, #fff)`,
+                      color,
                     }}
                   >
-                    {initials(lead.full_name)}
+                    <PhoneInTalkOutlinedIcon sx={{ fontSize: 20 }} />
                   </Box>
                   <Box sx={{ minWidth: 0 }}>
                     <Typography fontWeight={700} noWrap>
@@ -569,42 +603,81 @@ export function RemindersPage() {
                     <Typography variant="caption" color="text.secondary" noWrap display="block">
                       {lead.requirement || lead.company_name || 'Follow-up call'}
                     </Typography>
-                    <Typography variant="caption" color="primary.main" fontWeight={600} noWrap display="block">
+                    <Typography variant="caption" color="text.secondary" noWrap display="block">
                       {lead.lead_number}
-                      {projectBit} · {lead.mobile}
+                      {projectBit} ·{' '}
+                      <Box component="span" sx={{ color: 'primary.main', fontWeight: 600 }}>
+                        {lead.mobile}
+                      </Box>
                     </Typography>
                   </Box>
                 </Stack>
 
+                <Chip
+                  size="small"
+                  label={step}
+                  sx={{
+                    justifySelf: 'start',
+                    gridColumn: { xs: '2', md: 'auto' },
+                    bgcolor: `color-mix(in srgb, ${color} 12%, #fff)`,
+                    color,
+                    fontWeight: 600,
+                    borderRadius: '8px',
+                    ml: { xs: 7, md: 0 },
+                  }}
+                />
+                <Chip
+                  size="small"
+                  label={PRIORITY_LABEL[priorityKey]}
+                  sx={{
+                    justifySelf: 'start',
+                    gridColumn: { xs: '2', md: 'auto' },
+                    bgcolor: pri.bg,
+                    color: pri.color,
+                    fontWeight: 600,
+                    borderRadius: '999px',
+                    ml: { xs: 7, md: 0 },
+                  }}
+                />
                 <Stack
                   direction="row"
                   spacing={0.75}
-                  useFlexGap
-                  flexWrap="wrap"
-                  sx={{ gridColumn: { xs: '2', md: 'auto' }, alignItems: 'center' }}
+                  sx={{
+                    alignItems: 'center',
+                    gridColumn: { xs: '2', md: 'auto' },
+                    color: bucket === 'o' ? '#b91c1c' : bucket === 't' ? '#b45309' : '#334155',
+                    fontWeight: bucket === 'o' || bucket === 't' ? 600 : 500,
+                    fontSize: 13,
+                    whiteSpace: 'nowrap',
+                    ml: { xs: 7, md: 0 },
+                  }}
                 >
-                  {day ? (
-                    <Chip size="small" label={day} sx={{ bgcolor: DAY_CHIP.bg, color: DAY_CHIP.color, fontWeight: 700 }} />
-                  ) : null}
-                  <Chip
-                    size="small"
-                    label={PRIORITY_LABEL[priorityKey]}
-                    sx={{ bgcolor: pri.bg, color: pri.color, fontWeight: 700 }}
-                  />
-                  <Chip
-                    size="small"
-                    icon={<TodayOutlinedIcon sx={{ fontSize: '16px !important' }} />}
-                    label={formatDueLabel(lead.next_followup_at)}
-                    sx={{ bgcolor: '#f8fafc', fontWeight: 600 }}
-                  />
-                  <Chip size="small" label={tone.label} sx={{ bgcolor: tone.bg, color: tone.color, fontWeight: 700 }} />
+                  <TodayOutlinedIcon sx={{ fontSize: 15 }} />
+                  {formatDueLabel(lead.next_followup_at)}
                 </Stack>
+                <Chip
+                  size="small"
+                  label={tone.label}
+                  sx={{
+                    justifySelf: 'start',
+                    gridColumn: { xs: '2', md: 'auto' },
+                    bgcolor: tone.bg,
+                    color: tone.color,
+                    fontWeight: 600,
+                    borderRadius: '8px',
+                    ml: { xs: 7, md: 0 },
+                  }}
+                />
 
                 {canUpdate ? (
                   <Stack
                     direction="row"
-                    spacing={0.5}
-                    sx={{ gridColumn: { xs: '2', md: 'auto' }, justifyContent: { md: 'flex-end' } }}
+                    spacing={0.75}
+                    sx={{
+                      gridColumn: { xs: '2', md: 'auto' },
+                      justifyContent: { xs: 'flex-start', md: 'flex-end' },
+                      ml: { xs: 7, md: 0 },
+                    }}
                   >
                     <IconButton
                       size="small"
@@ -615,7 +688,14 @@ export function RemindersPage() {
                         setCallLead(lead)
                         setCallSummary('')
                       }}
-                      sx={{ bgcolor: '#e0e7ff', '&:hover': { bgcolor: '#c7d2fe' } }}
+                      sx={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: '10px',
+                        bgcolor: 'primary.main',
+                        color: '#fff',
+                        '&:hover': { bgcolor: 'primary.dark' },
+                      }}
                     >
                       <CheckIcon fontSize="small" />
                     </IconButton>
@@ -626,6 +706,13 @@ export function RemindersPage() {
                       onClick={(event) => {
                         setMenuAnchor(event.currentTarget)
                         setMenuLead(lead)
+                      }}
+                      sx={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: '8px',
+                        color: 'text.secondary',
+                        '&:hover': { bgcolor: '#eef2f7', color: 'text.primary' },
                       }}
                     >
                       <MoreVertIcon fontSize="small" />
@@ -641,15 +728,29 @@ export function RemindersPage() {
           <Typography variant="body2" sx={{ flex: 1 }}>
             Showing {pageRows.length} of {filtered.length} reminders
           </Typography>
-          <Button size="small" disabled={pageSafe <= 1} onClick={() => setPage((current) => current - 1)}>
-            ‹
-          </Button>
-          <Typography variant="body2">
-            {pageSafe} / {pages}
-          </Typography>
-          <Button size="small" disabled={pageSafe >= pages} onClick={() => setPage((current) => current + 1)}>
-            ›
-          </Button>
+          {showPagination ? (
+            <>
+              <Button
+                size="small"
+                disabled={pageSafe <= 1}
+                onClick={() => setPage((current) => current - 1)}
+                sx={{ minWidth: 32, height: 32, border: '1px solid #dbe3ee', borderRadius: '8px' }}
+              >
+                ‹
+              </Button>
+              <Typography variant="body2">
+                {pageSafe} / {pages}
+              </Typography>
+              <Button
+                size="small"
+                disabled={pageSafe >= pages}
+                onClick={() => setPage((current) => current + 1)}
+                sx={{ minWidth: 32, height: 32, border: '1px solid #dbe3ee', borderRadius: '8px' }}
+              >
+                ›
+              </Button>
+            </>
+          ) : null}
         </Stack>
       </Box>
 
@@ -676,9 +777,6 @@ export function RemindersPage() {
               ✕
             </IconButton>
           </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Set a custom follow-up date for a lead.
-          </Typography>
           <Stack spacing={2}>
             <TextField
               select
@@ -690,7 +788,6 @@ export function RemindersPage() {
               {addLeadOptions.map((lead) => (
                 <MenuItem key={lead.id} value={lead.id}>
                   {lead.full_name} · {lead.lead_number}
-                  {lead.project_name ? ` · ${lead.project_name}` : ''}
                 </MenuItem>
               ))}
             </TextField>
@@ -721,7 +818,6 @@ export function RemindersPage() {
               label="Notes"
               multiline
               minRows={3}
-              placeholder="Why this date? Add important details."
               value={addNotes}
               onChange={(event) => setAddNotes(event.target.value)}
             />
@@ -737,24 +833,32 @@ export function RemindersPage() {
         </Box>
       </Drawer>
 
-      <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={closeMenu}>
-        <MenuItem
-          component={RouterLink}
-          to="/app/leads"
-          onClick={closeMenu}
-        >
+      <Menu
+        anchorEl={menuAnchor}
+        open={Boolean(menuAnchor)}
+        onClose={closeMenu}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        slotProps={{
+          paper: {
+            sx: {
+              minWidth: 180,
+              borderRadius: '12px',
+              border: '1px solid #e6e8ec',
+              boxShadow: '0 14px 30px rgba(15,23,42,.18)',
+              mt: 0.5,
+              py: 0.5,
+            },
+          },
+        }}
+      >
+        <MenuItem disabled={!menuLead} onClick={() => menuLead && openLead(menuLead)} sx={{ borderRadius: '8px', mx: 0.5, fontSize: 13 }}>
           Open lead
         </MenuItem>
-        <MenuItem
-          disabled={saving || !menuLead}
-          onClick={() => menuLead && void markNoAnswer(menuLead)}
-        >
+        <MenuItem disabled={saving || !menuLead} onClick={() => menuLead && void markNoAnswer(menuLead)} sx={{ borderRadius: '8px', mx: 0.5, fontSize: 13 }}>
           No answer
         </MenuItem>
-        <MenuItem
-          disabled={saving || !menuLead}
-          onClick={() => menuLead && void snoozeLead(menuLead)}
-        >
+        <MenuItem disabled={saving || !menuLead} onClick={() => menuLead && void snoozeLead(menuLead)} sx={{ borderRadius: '8px', mx: 0.5, fontSize: 13 }}>
           Snooze to tomorrow
         </MenuItem>
         <MenuItem
@@ -765,6 +869,7 @@ export function RemindersPage() {
             setRescheduleDate(isoToDateInput(addDaysIso(menuLead.next_followup_at, 1)))
             closeMenu()
           }}
+          sx={{ borderRadius: '8px', mx: 0.5, fontSize: 13 }}
         >
           Reschedule
         </MenuItem>
@@ -776,7 +881,6 @@ export function RemindersPage() {
           <DialogContent>
             <TextField
               label="Call summary"
-              placeholder="What happened on the call?"
               value={callSummary}
               fullWidth
               multiline
@@ -818,6 +922,21 @@ export function RemindersPage() {
           </DialogActions>
         </Box>
       </Dialog>
+
+      <ReminderLeadDrawer
+        lead={drawerLead}
+        canUpdate={canUpdate}
+        plan={plan}
+        onClose={() => setDrawerLeadId(null)}
+        onChanged={onDrawerChanged}
+      />
+
+      <FollowupPlanSettingsDialog
+        open={planOpen}
+        companyId={user?.company_id}
+        onClose={() => setPlanOpen(false)}
+        onSaved={setPlan}
+      />
     </Stack>
   )
 }

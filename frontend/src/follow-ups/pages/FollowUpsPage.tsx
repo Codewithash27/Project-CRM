@@ -16,6 +16,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { ErrorAlert } from '../../components/common/ErrorAlert'
 import { LoadingScreen } from '../../components/common/LoadingScreen'
+import {
+  FollowupPlanStep,
+  gapForStep,
+  loadFollowupPlan,
+  nextPlanStep,
+  planLabels,
+} from '../../followup-plan/plan'
 import { addDaysIso, followWhen, formatDueLabel } from '../../leads/lead-dates'
 import {
   Lead,
@@ -28,27 +35,6 @@ import {
 import { ApiError } from '../../services/api/errors'
 import { api } from '../../services/api/client'
 import { useAuth } from '../../store/auth-context'
-
-const PLAN_STEPS = ['Day 1', 'Day 3', 'Day 7', 'Day 21', '3-month review', 'Custom'] as const
-type PlanStep = (typeof PLAN_STEPS)[number]
-
-const STEP_NEXT: Record<PlanStep, PlanStep | null> = {
-  'Day 1': 'Day 3',
-  'Day 3': 'Day 7',
-  'Day 7': 'Day 21',
-  'Day 21': '3-month review',
-  '3-month review': null,
-  Custom: null,
-}
-
-const STEP_DUE_DAYS: Record<PlanStep, number> = {
-  'Day 1': 1,
-  'Day 3': 3,
-  'Day 7': 7,
-  'Day 21': 21,
-  '3-month review': 90,
-  Custom: 7,
-}
 
 type SessionTally = { connected: number; noAnswer: number; snoozed: number; skipped: number }
 
@@ -77,6 +63,11 @@ export function FollowUpsPage() {
   const [tally, setTally] = useState<SessionTally>({ connected: 0, noAnswer: 0, snoozed: 0, skipped: 0 })
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null)
   const [menuLead, setMenuLead] = useState<Lead | null>(null)
+  const [plan, setPlan] = useState<FollowupPlanStep[]>(() => loadFollowupPlan(user?.company_id))
+
+  useEffect(() => {
+    setPlan(loadFollowupPlan(user?.company_id))
+  }, [user?.company_id])
 
   useEffect(() => {
     void (async () => {
@@ -148,12 +139,12 @@ export function FollowUpsPage() {
   }
 
   async function onConnected(lead: Lead) {
-    const current = (PLAN_STEPS.includes(lead.plan_step as PlanStep) ? lead.plan_step : 'Day 1') as PlanStep
-    const nextStep = STEP_NEXT[current]
-    const targetStep = nextStep ?? current
+    const current = lead.plan_step || plan[0]?.label || 'Day 1'
+    const next = nextPlanStep(plan, current)
+    const target = next?.label ?? current
     const body: Record<string, unknown> = {
-      next_followup_at: addDaysIso(null, STEP_DUE_DAYS[targetStep]),
-      plan_step: targetStep,
+      next_followup_at: next ? addDaysIso(null, next.gapDays) : addDaysIso(null, gapForStep(plan, target)),
+      plan_step: target,
     }
     if (lead.status === 'new') body.status = 'contacted'
     const note = 'Connected'
@@ -234,7 +225,7 @@ export function FollowUpsPage() {
           sx={{ minWidth: { xs: '100%', sm: 260 } }}
         >
           <MenuItem value="">All steps</MenuItem>
-          {PLAN_STEPS.map((item) => (
+          {planLabels(plan).map((item) => (
             <MenuItem key={item} value={item}>
               {item}
             </MenuItem>

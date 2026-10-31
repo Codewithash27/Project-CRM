@@ -11,6 +11,7 @@ from app.common.responses import ApiResponse, error_responses
 from app.core.database import get_db
 from app.leads.schemas import (
     CreateLeadRequest,
+    LeadActivityList,
     LeadListData,
     LeadPlanStep,
     LeadPriority,
@@ -23,6 +24,7 @@ from app.leads.service import (
     create_lead,
     delete_lead,
     get_lead,
+    list_lead_activity,
     list_leads,
     project_names_for_leads,
     update_lead,
@@ -106,6 +108,25 @@ def get_leads(
     names = project_names_for_leads(db, leads)
     return ApiResponse(
         data=LeadListData(items=[_public(lead, names) for lead in leads], total=total),
+        message="Success",
+    )
+
+
+@router.get(
+    "/{lead_id}/activity",
+    response_model=ApiResponse[LeadActivityList],
+    summary="Lead activity",
+    description="Returns recent activity for one lead from the audit log.",
+    responses=error_responses(401, 403, 404),
+)
+def get_lead_activity(
+    lead_id: uuid.UUID,
+    actor: User = Depends(require_permission("leads.read")),
+    db: Session = Depends(get_db),
+    limit: int = Query(default=50, ge=1, le=100),
+) -> ApiResponse[LeadActivityList]:
+    return ApiResponse(
+        data=list_lead_activity(db, actor=actor, lead_id=lead_id, limit=limit),
         message="Success",
     )
 

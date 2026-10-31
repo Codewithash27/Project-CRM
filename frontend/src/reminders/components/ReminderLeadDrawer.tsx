@@ -1,0 +1,789 @@
+import {
+  Box,
+  Button,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Drawer,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
+  useMediaQuery,
+} from '@mui/material'
+import { useTheme } from '@mui/material/styles'
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+
+import type { LeadField, LeadFieldList } from '../../lead-fields/types'
+import { OPTION_TYPES } from '../../lead-fields/types'
+import {
+  CUSTOM_STEP,
+  FollowupPlanStep,
+  gapForStep,
+  nextPlanStep,
+  stepIndex as planStepIndex,
+} from '../../followup-plan/plan'
+import {
+  addDaysIso,
+  dateInputToIsoNoon,
+  isoToDateInput,
+} from '../../leads/lead-dates'
+import {
+  LEAD_SOURCES,
+  LEAD_STATUSES,
+  Lead,
+  LeadPriority,
+  LeadStatus,
+  PRIORITY_LABEL,
+  STATUS_LABEL,
+  STATUS_TONE,
+} from '../../leads/types'
+import { ApiError } from '../../services/api/errors'
+import { api } from '../../services/api/client'
+
+type DrawerForm = {
+  full_name: string
+  mobile: string
+  email: string
+  city: string
+  requirement: string
+  lead_source: string
+  priority: LeadPriority
+  status: LeadStatus
+  enquiry_date: string
+  extra_values: Record<string, string>
+}
+
+type ActionKind = 'connected' | 'noanswer' | 'reschedule' | 'skip' | 'custom' | 'note' | null
+
+function currentPlanLabel(lead: Lead, plan: FollowupPlanStep[]) {
+  const step = (lead.plan_step || '').trim()
+  if (!step) return plan[0]?.label || 'Day 1'
+  if (step === CUSTOM_STEP) return CUSTOM_STEP
+  if (plan.some((item) => item.label === step)) return step
+  return step
+}
+
+function formFromLead(lead: Lead): DrawerForm {
+  const extras: Record<string, string> = {}
+  for (const [key, value] of Object.entries(lead.extra_values ?? {})) {
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      extras[key] = String(value)
+    } else if (Array.isArray(value)) {
+      extras[key] = value.map(String).join(', ')
+    }
+  }
+  return {
+    full_name: lead.full_name,
+    mobile: lead.mobile,
+    email: lead.email ?? '',
+    city: lead.city ?? '',
+    requirement: lead.requirement ?? '',
+    lead_source: lead.lead_source ?? '',
+    priority: lead.priority,
+    status: lead.status,
+    enquiry_date: isoToDateInput(lead.created_at),
+    extra_values: extras,
+  }
+}
+
+type LeadActivityItem = {
+  id: string
+  actor_name: string
+  at: string
+  message: string
+}
+
+type Props = {
+  lead: Lead | null
+  canUpdate: boolean
+  plan: FollowupPlanStep[]
+  onClose: () => void
+  onChanged: (message: string) => Promise<void>
+}
+
+function formatActivityAt(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleDateString('en-CA')
+}
+
+export function ReminderLeadDrawer({ lead, canUpdate, plan, onClose, onChanged }: Props) {
+  const theme = useTheme()
+  const phone = useMediaQuery(theme.breakpoints.down('md'))
+  const open = Boolean(lead)
+
+  const [form, setForm] = useState<DrawerForm | null>(null)
+  const [fields, setFields] = useState<LeadField[]>([])
+  const [activity, setActivity] = useState<LeadActivityItem[]>([])
+  const [saving, setSaving] = useState(false)
+  const [localError, setLocalError] = useState('')
+  const [action, setAction] = useState<ActionKind>(null)
+  const [actionNote, setActionNote] = useState('')
+  const [actionDate, setActionDate] = useState(() => isoToDateInput(addDaysIso(null, 1)))
+
+  const loadActivity = useCallback(async (leadId: string) => {
+    try {
+      const result = await api.get<{ items: LeadActivityItem[] }>(`/api/v1/leads/${leadId}/activity`)
+      setActivity(result.data.items)
+    } catch {
+      setActivity([])
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!lead) {
+      setForm(null)
+      setFields([])
+      setActivity([])
+      setLocalError('')
+      setAction(null)
+      return
+    }
+    setForm(formFromLead(lead))
+    setLocalError('')
+    setAction(null)
+    void loadActivity(lead.id)
+    void (async () => {
+      if (!lead.project_id) {
+        setFields([])
+        return
+      }
+      try {
+        const result = await api.get<LeadFieldList>(`/api/v1/lead-fields?project_id=${lead.project_id}`)
+        setFields(result.data.items.filter((field) => field.is_active))
+      } catch {
+        setFields([])
+      }
+    })()
+  }, [lead, loadActivity])
+
+  const statusTone = lead ? STATUS_TONE[lead.status] ?? STATUS_TONE.new : STATUS_TONE.new
+  const currentStep = lead ? currentPlanLabel(lead, plan) : plan[0]?.label || 'Day 1'
+  const currentIdx = planStepIndex(plan, currentStep)
+
+  const closed = lead ? lead.status === 'won' || lead.status === 'lost' : false
+
+  const patch = useCallback(
+    async (body: Record<string, unknown>, message: string, closeDrawer = false) => {
+      if (!lead) return
+      setSaving(true)
+      setLocalError('')
+      try {
+      await api.patch(`/api/v1/leads/${lead.id}`, body)
+      await onChanged(message)
+      await loadActivity(lead.id)
+      if (closeDrawer) onClose()
+      else setAction(null)
+      } catch (requestError) {
+        setLocalError(requestError instanceof ApiError ? requestError.message : 'Could not update lead.')
+      } finally {
+        setSaving(false)
+      }
+    },
+    [lead, loadActivity, onChanged, onClose],
+  )
+
+  async function saveField(body: Record<string, unknown>) {
+    if (!lead || !canUpdate) return
+    await patch(body, 'Lead updated.')
+  }
+
+  async function submitAction(event: FormEvent) {
+    event.preventDefault()
+    if (!lead || !action) return
+
+    if (action === 'connected') {
+      const summary = actionNote.trim()
+      if (!summary) {
+        setLocalError('Write a short call summary.')
+        return
+      }
+      const next = nextPlanStep(plan, currentStep)
+      const body: Record<string, unknown> = {
+        plan_step: next?.label ?? currentStep,
+        next_followup_at: next ? addDaysIso(null, next.gapDays) : null,
+        requirement: lead.requirement ? `${lead.requirement}\nCall: ${summary}` : `Call: ${summary}`,
+      }
+      if (lead.status === 'new') body.status = 'contacted'
+      await patch(body, `Connected · ${lead.full_name}`)
+      return
+    }
+
+    if (action === 'noanswer') {
+      const note = actionNote.trim() || 'No answer'
+      await patch(
+        {
+          requirement: lead.requirement ? `${lead.requirement}\n${note}` : note,
+          next_followup_at: addDaysIso(lead.next_followup_at, 1),
+        },
+        `No answer · ${lead.full_name}`,
+      )
+      return
+    }
+
+    if (action === 'reschedule') {
+      const iso = dateInputToIsoNoon(actionDate)
+      if (!iso) {
+        setLocalError('Pick a valid due date.')
+        return
+      }
+      await patch({ next_followup_at: iso }, `Rescheduled · ${lead.full_name}`)
+      return
+    }
+
+    if (action === 'skip') {
+      const why = actionNote.trim()
+      if (!why) {
+        setLocalError('Add a reason to skip.')
+        return
+      }
+      const next = nextPlanStep(plan, currentStep)
+      if (!next) {
+        await patch(
+          {
+            next_followup_at: null,
+            requirement: lead.requirement ? `${lead.requirement}\nSkipped: ${why}` : `Skipped: ${why}`,
+          },
+          `Skipped · ${lead.full_name}`,
+        )
+        return
+      }
+      await patch(
+        {
+          plan_step: next.label,
+          next_followup_at: addDaysIso(null, next.gapDays),
+          requirement: lead.requirement ? `${lead.requirement}\nSkipped: ${why}` : `Skipped: ${why}`,
+        },
+        `Skipped · ${lead.full_name}`,
+      )
+      return
+    }
+
+    if (action === 'custom') {
+      const iso = dateInputToIsoNoon(actionDate)
+      const why = actionNote.trim()
+      if (!iso) {
+        setLocalError('Pick a valid due date.')
+        return
+      }
+      if (!why) {
+        setLocalError('Add a reason for the custom date.')
+        return
+      }
+      await patch(
+        {
+          plan_step: CUSTOM_STEP,
+          next_followup_at: iso,
+          requirement: lead.requirement ? `${lead.requirement}\nCustom: ${why}` : `Custom: ${why}`,
+        },
+        `Custom date · ${lead.full_name}`,
+      )
+      return
+    }
+
+    if (action === 'note') {
+      const note = actionNote.trim()
+      if (!note) {
+        setLocalError('Write a call summary.')
+        return
+      }
+      await patch(
+        {
+          requirement: lead.requirement ? `${lead.requirement}\nCall: ${note}` : `Call: ${note}`,
+        },
+        `Call summary saved · ${lead.full_name}`,
+      )
+    }
+  }
+
+  const actionTitle = useMemo(() => {
+    switch (action) {
+      case 'connected':
+        return 'Mark connected'
+      case 'noanswer':
+        return 'No answer'
+      case 'reschedule':
+        return 'Reschedule'
+      case 'skip':
+        return 'Skip step'
+      case 'custom':
+        return 'Custom date'
+      case 'note':
+        return 'Add call summary'
+      default:
+        return ''
+    }
+  }, [action])
+
+  return (
+    <>
+      <Drawer
+        anchor={phone ? 'bottom' : 'right'}
+        open={open}
+        onClose={onClose}
+        PaperProps={{
+          sx: {
+            width: { xs: '100%', sm: 520 },
+            maxWidth: '100%',
+            maxHeight: { xs: '92vh', sm: '100%' },
+            borderTopLeftRadius: { xs: 16, sm: 0 },
+            borderTopRightRadius: { xs: 16, sm: 0 },
+            p: 2.25,
+            boxShadow: '-12px 0 30px rgba(15,23,42,.12)',
+          },
+        }}
+      >
+        {lead && form ? (
+          <Stack spacing={2}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+              <Typography variant="h6" fontWeight={700}>
+                {lead.lead_number}
+              </Typography>
+              <Chip
+                size="small"
+                label={STATUS_LABEL[lead.status] ?? lead.status}
+                sx={{ bgcolor: statusTone.bg, color: statusTone.color, fontWeight: 700 }}
+              />
+              <Box sx={{ flex: 1 }} />
+              <Button onClick={onClose}>Close</Button>
+            </Stack>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
+              {lead.project_name || 'Project'} · project cannot be changed
+            </Typography>
+
+            {localError ? (
+              <Typography color="error" variant="body2">
+                {localError}
+              </Typography>
+            ) : null}
+
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                gap: 1.25,
+              }}
+            >
+              <TextField
+                label="Contact Person Name"
+                value={form.full_name}
+                disabled={!canUpdate || saving}
+                onChange={(event) => setForm({ ...form, full_name: event.target.value })}
+                onBlur={() => {
+                  if (form.full_name.trim() && form.full_name !== lead.full_name) {
+                    void saveField({ full_name: form.full_name.trim() })
+                  }
+                }}
+              />
+              <TextField
+                label="Mobile Number"
+                value={form.mobile}
+                disabled={!canUpdate || saving}
+                onChange={(event) => setForm({ ...form, mobile: event.target.value })}
+                onBlur={() => {
+                  if (form.mobile.trim() && form.mobile !== lead.mobile) {
+                    void saveField({ mobile: form.mobile.trim() })
+                  }
+                }}
+              />
+              <TextField
+                label="Enquiry Date"
+                type="date"
+                value={form.enquiry_date}
+                disabled
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                label="Location"
+                value={form.city}
+                disabled={!canUpdate || saving}
+                onChange={(event) => setForm({ ...form, city: event.target.value })}
+                onBlur={() => {
+                  if (form.city !== (lead.city ?? '')) {
+                    void saveField({ city: form.city.trim() || null })
+                  }
+                }}
+              />
+              <TextField
+                label="Email"
+                value={form.email}
+                disabled={!canUpdate || saving}
+                onChange={(event) => setForm({ ...form, email: event.target.value })}
+                onBlur={() => {
+                  if (form.email !== (lead.email ?? '')) {
+                    void saveField({ email: form.email.trim() || null })
+                  }
+                }}
+              />
+              <TextField
+                label="Requirement"
+                value={form.requirement}
+                disabled={!canUpdate || saving}
+                onChange={(event) => setForm({ ...form, requirement: event.target.value })}
+                onBlur={() => {
+                  if (form.requirement !== (lead.requirement ?? '')) {
+                    void saveField({ requirement: form.requirement.trim() || null })
+                  }
+                }}
+              />
+              <TextField
+                select
+                label="Lead Source"
+                value={form.lead_source}
+                disabled={!canUpdate || saving}
+                onChange={(event) => {
+                  const lead_source = event.target.value
+                  setForm({ ...form, lead_source })
+                  void saveField({ lead_source: lead_source || null })
+                }}
+              >
+                <MenuItem value="">—</MenuItem>
+                {LEAD_SOURCES.map((source) => (
+                  <MenuItem key={source} value={source}>
+                    {source}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                label="Priority"
+                value={form.priority}
+                disabled={!canUpdate || saving}
+                onChange={(event) => {
+                  const priority = event.target.value as LeadPriority
+                  setForm({ ...form, priority })
+                  void saveField({ priority })
+                }}
+              >
+                <MenuItem value="high">{PRIORITY_LABEL.high}</MenuItem>
+                <MenuItem value="medium">{PRIORITY_LABEL.medium}</MenuItem>
+                <MenuItem value="low">{PRIORITY_LABEL.low}</MenuItem>
+              </TextField>
+              <TextField
+                select
+                label="Status"
+                value={form.status}
+                disabled={!canUpdate || saving || closed}
+                onChange={(event) => {
+                  const status = event.target.value as LeadStatus
+                  setForm({ ...form, status })
+                  void saveField({ status })
+                }}
+              >
+                {LEAD_STATUSES.map((status) => (
+                  <MenuItem key={status} value={status}>
+                    {STATUS_LABEL[status] ?? status}
+                  </MenuItem>
+                ))}
+              </TextField>
+              {fields.map((field) => {
+                const value = form.extra_values[field.key] ?? ''
+                if (OPTION_TYPES.has(field.field_type)) {
+                  return (
+                    <TextField
+                      key={field.id}
+                      select
+                      label={field.label}
+                      value={value}
+                      disabled={!canUpdate || saving}
+                      onChange={(event) => {
+                        const next = event.target.value
+                        const extra_values = { ...form.extra_values, [field.key]: next }
+                        setForm({ ...form, extra_values })
+                        void saveField({
+                          extra_values: { ...(lead.extra_values ?? {}), [field.key]: next || null },
+                        })
+                      }}
+                    >
+                      <MenuItem value="">—</MenuItem>
+                      {(field.options ?? []).map((option) => (
+                        <MenuItem key={option} value={option}>
+                          {option}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  )
+                }
+                return (
+                  <TextField
+                    key={field.id}
+                    label={field.label}
+                    type={field.field_type === 'date' ? 'date' : field.field_type === 'number' ? 'number' : 'text'}
+                    value={value}
+                    disabled={!canUpdate || saving}
+                    InputLabelProps={field.field_type === 'date' ? { shrink: true } : undefined}
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        extra_values: { ...form.extra_values, [field.key]: event.target.value },
+                      })
+                    }
+                    onBlur={() => {
+                      const next = form.extra_values[field.key] ?? ''
+                      const prev = String(lead.extra_values?.[field.key] ?? '')
+                      if (next !== prev) {
+                        void saveField({
+                          extra_values: { ...(lead.extra_values ?? {}), [field.key]: next || null },
+                        })
+                      }
+                    }}
+                  />
+                )
+              })}
+            </Box>
+
+            <Box>
+              <Typography fontWeight={700} sx={{ mb: 1 }}>
+                Follow-up plan
+              </Typography>
+              <Stack direction="row" spacing={0.75} sx={{ overflowX: 'auto', pb: 0.5 }}>
+                {plan.map((step, index) => {
+                  const done = currentIdx >= 0 && index < currentIdx
+                  const showCurrent = currentStep === step.label
+                  return (
+                    <Box
+                      key={`${step.label}-${index}`}
+                      sx={{
+                        flex: '1 0 72px',
+                        minWidth: 72,
+                        border: '1px solid',
+                        borderColor: showCurrent ? 'primary.main' : 'divider',
+                        bgcolor: done ? '#ecfdf5' : showCurrent ? '#eff6ff' : '#fff',
+                        borderRadius: '8px',
+                        p: 0.75,
+                        fontSize: 12,
+                        fontWeight: showCurrent ? 700 : 500,
+                      }}
+                    >
+                      {step.label}
+                      <Typography component="div" variant="caption" color="text.secondary" display="block">
+                        {showCurrent
+                          ? `Due ${isoToDateInput(lead.next_followup_at) || '—'}`
+                          : done
+                            ? 'Connected'
+                            : `+${step.gapDays}d`}
+                      </Typography>
+                    </Box>
+                  )
+                })}
+              </Stack>
+              {currentStep === CUSTOM_STEP ? (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
+                  Custom follow-up · due {isoToDateInput(lead.next_followup_at) || '—'}
+                </Typography>
+              ) : null}
+            </Box>
+
+            {canUpdate ? (
+              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                {lead.next_followup_at ? (
+                  <>
+                    <Button
+                      variant="contained"
+                      disabled={saving}
+                      onClick={() => {
+                        setAction('connected')
+                        setActionNote('')
+                        setLocalError('')
+                      }}
+                    >
+                      Mark connected
+                    </Button>
+                    <Button
+                      disabled={saving}
+                      onClick={() => {
+                        setAction('noanswer')
+                        setActionNote('')
+                        setLocalError('')
+                      }}
+                    >
+                      No answer
+                    </Button>
+                    <Button
+                      disabled={saving}
+                      onClick={() => {
+                        void patch(
+                          { next_followup_at: addDaysIso(lead.next_followup_at, 1) },
+                          `Snoozed · ${lead.full_name}`,
+                        )
+                      }}
+                    >
+                      Snooze to tomorrow
+                    </Button>
+                    <Button
+                      disabled={saving}
+                      onClick={() => {
+                        setAction('reschedule')
+                        setActionDate(isoToDateInput(addDaysIso(lead.next_followup_at, 1)))
+                        setActionNote('')
+                        setLocalError('')
+                      }}
+                    >
+                      Reschedule
+                    </Button>
+                    <Button
+                      disabled={saving}
+                      onClick={() => {
+                        setAction('skip')
+                        setActionNote('')
+                        setLocalError('')
+                      }}
+                    >
+                      Skip step
+                    </Button>
+                    <Button
+                      disabled={saving}
+                      onClick={() => {
+                        setAction('custom')
+                        setActionDate(isoToDateInput(addDaysIso(null, 1)))
+                        setActionNote('')
+                        setLocalError('')
+                      }}
+                    >
+                      Custom date
+                    </Button>
+                  </>
+                ) : null}
+                <Button
+                  disabled={saving}
+                  onClick={() => {
+                    setAction('note')
+                    setActionNote('')
+                    setLocalError('')
+                  }}
+                >
+                  Add call summary
+                </Button>
+                {!closed ? (
+                  <Button
+                    disabled={saving}
+                    color="error"
+                    onClick={() => void patch({ status: 'lost', next_followup_at: null }, `Marked lost · ${lead.full_name}`)}
+                  >
+                    Mark Lost
+                  </Button>
+                ) : (
+                  <Button
+                    variant="contained"
+                    disabled={saving}
+                    onClick={() =>
+                      void patch(
+                        {
+                          status: 'contacted',
+                          plan_step: plan[0]?.label || 'Day 1',
+                          next_followup_at: addDaysIso(null, gapForStep(plan, plan[0]?.label || 'Day 1')),
+                        },
+                        `Reopened · ${lead.full_name}`,
+                      )
+                    }
+                  >
+                    Reopen lead
+                  </Button>
+                )}
+              </Stack>
+            ) : null}
+
+            <Box>
+              <Typography fontWeight={700} sx={{ mb: 1 }}>
+                Activity
+              </Typography>
+              {activity.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No activity yet.
+                </Typography>
+              ) : (
+                <Box component="ul" sx={{ m: 0, p: 0, listStyle: 'none' }}>
+                  {activity.map((item) => (
+                    <Box
+                      component="li"
+                      key={item.id}
+                      sx={{
+                        py: 1,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                        '&:last-child': { borderBottom: 0 },
+                      }}
+                    >
+                      <Typography variant="body2" fontWeight={700}>
+                        {item.actor_name}
+                        <Box component="span" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                          {' '}
+                          · {formatActivityAt(item.at)}
+                        </Box>
+                      </Typography>
+                      <Typography variant="body2" color="text.primary">
+                        {item.message}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+            </Box>
+          </Stack>
+        ) : null}
+      </Drawer>
+
+      <Dialog open={Boolean(action)} onClose={() => !saving && setAction(null)} fullWidth maxWidth="xs">
+        <Box component="form" onSubmit={(event) => void submitAction(event)}>
+          <DialogTitle>
+            {actionTitle}
+            {lead ? ` · ${lead.full_name}` : ''}
+          </DialogTitle>
+          <DialogContent>
+            {action === 'reschedule' || action === 'custom' ? (
+              <TextField
+                label={action === 'custom' ? 'Due date' : 'New due date'}
+                type="date"
+                required
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+                value={actionDate}
+                sx={{ mt: 1 }}
+                onChange={(event) => setActionDate(event.target.value)}
+              />
+            ) : null}
+            {action === 'connected' ||
+            action === 'noanswer' ||
+            action === 'skip' ||
+            action === 'custom' ||
+            action === 'note' ? (
+              <TextField
+                label={
+                  action === 'connected' || action === 'note'
+                    ? 'Call summary'
+                    : action === 'skip' || action === 'custom'
+                      ? 'Reason'
+                      : 'One-line note'
+                }
+                required={action !== 'noanswer'}
+                value={actionNote}
+                fullWidth
+                multiline
+                minRows={action === 'connected' || action === 'note' ? 3 : 2}
+                autoFocus
+                sx={{ mt: 1 }}
+                onChange={(event) => setActionNote(event.target.value)}
+              />
+            ) : null}
+            {localError ? (
+              <Typography color="error" variant="body2" sx={{ mt: 1 }}>
+                {localError}
+              </Typography>
+            ) : null}
+          </DialogContent>
+          <DialogActions>
+            <Button disabled={saving} onClick={() => setAction(null)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="contained" disabled={saving}>
+              Save
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+    </>
+  )
+}

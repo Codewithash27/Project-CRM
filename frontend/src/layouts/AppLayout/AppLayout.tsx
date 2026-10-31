@@ -17,12 +17,12 @@ import {
 import { useTheme } from '@mui/material/styles'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Outlet, useNavigate } from 'react-router-dom'
 
 import { roleLabel } from '../../access/role-label'
 import { useAuth } from '../../store/auth-context'
 import { SidebarNav } from './SidebarNav'
-import { isNavActive, primaryRole, visibleNav } from './nav'
+import { primaryRole } from './nav'
 
 const EXPANDED = 220
 const COLLAPSED = 76
@@ -40,13 +40,10 @@ export function AppLayout() {
   const desktop = useMediaQuery(theme.breakpoints.up('md'))
   const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const { pathname } = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [accountAnchor, setAccountAnchor] = useState<null | HTMLElement>(null)
   const sidebarWidth = desktop && collapsed ? COLLAPSED : EXPANDED
-  const items = visibleNav(user?.roles ?? [], user?.permissions ?? [])
-  const current = items.find((item) => isNavActive(pathname, item))
   const leadRole = primaryRole(user?.roles ?? [])
 
   async function onLogout() {
@@ -134,11 +131,8 @@ export function AppLayout() {
               {mobileOpen ? <CloseOutlinedIcon /> : <MenuOutlinedIcon />}
             </IconButton>
             <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontWeight: 500 }}>
-                {current ? t(`navigation:sections.${current.section}`) : t('navigation:workspace')}
-              </Typography>
-              <Typography noWrap sx={{ fontWeight: 600, fontSize: '0.95rem' }}>
-                {current ? t(`navigation:items.${current.id}`) : t('auth:appName')}
+              <Typography noWrap sx={{ fontWeight: 600, fontSize: '0.875rem', color: 'text.secondary' }}>
+                {t('auth:appName')}
               </Typography>
             </Box>
             <Button

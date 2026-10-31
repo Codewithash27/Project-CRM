@@ -23,7 +23,8 @@ import {
   useMediaQuery,
 } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { ErrorAlert } from '../../components/common/ErrorAlert'
 import { LoadingScreen } from '../../components/common/LoadingScreen'
@@ -122,6 +123,10 @@ function extraFromLead(lead: Lead): Record<string, string | string[] | boolean> 
 export function LeadsPage() {
   const theme = useTheme()
   const phone = useMediaQuery(theme.breakpoints.down('sm'))
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const openLeadId = searchParams.get('open')
+  const openedFromQuery = useRef<string | null>(null)
   const { user } = useAuth()
   const canCreate = Boolean(user?.permissions.includes('leads.create'))
   const canUpdate = Boolean(user?.permissions.includes('leads.update'))
@@ -270,6 +275,36 @@ export function LeadsPage() {
     setFieldErrors({})
     await loadProjectFields(lead.project_id ?? '')
   }
+
+  useEffect(() => {
+    if (!openLeadId || loading || openedFromQuery.current === openLeadId) return
+
+    let cancelled = false
+    void (async () => {
+      const match = items.find((lead) => lead.id === openLeadId)
+      try {
+        const lead =
+          match ??
+          (await api.get<Lead>(`/api/v1/leads/${openLeadId}`)).data
+        if (cancelled) return
+        openedFromQuery.current = openLeadId
+        await openEdit(lead)
+        navigate('/app/leads', { replace: true })
+      } catch {
+        if (!cancelled) {
+          openedFromQuery.current = openLeadId
+          navigate('/app/leads', { replace: true })
+          setError('Could not open that lead.')
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+    // openEdit reads current form helpers; run once per openLeadId after list load
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, loading, navigate, openLeadId])
 
   function validate(): boolean {
     const next: Record<string, string> = {}

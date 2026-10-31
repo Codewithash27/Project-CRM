@@ -12,10 +12,13 @@ import {
 } from '@mui/material'
 import MenuOpenOutlinedIcon from '@mui/icons-material/MenuOpenOutlined'
 import MenuOutlinedIcon from '@mui/icons-material/MenuOutlined'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link as RouterLink, useLocation } from 'react-router-dom'
 
 import { roleLabel } from '../../access/role-label'
+import type { LeadList } from '../../leads/types'
+import { api } from '../../services/api/client'
 import { useAuth } from '../../store/auth-context'
 import { SECTIONS, homePathForRoles, isNavActive, primaryRole, visibleNav, type NavItem } from './nav'
 
@@ -31,22 +34,25 @@ function NavButton({
   label,
   collapsed,
   active,
+  badge,
   onNavigate,
 }: {
   item: NavItem
   label: string
   collapsed: boolean
   active: boolean
+  badge?: number
   onNavigate?: () => void
 }) {
   const Icon = item.icon
+  const tip = badge && badge > 0 ? `${label} (${badge})` : label
   const button = (
     <ListItemButton
       component={RouterLink}
       to={item.path}
       selected={active}
       aria-current={active ? 'page' : undefined}
-      aria-label={label}
+      aria-label={tip}
       onClick={onNavigate}
       sx={{
         minHeight: 40,
@@ -68,14 +74,62 @@ function NavButton({
           minWidth: collapsed ? 0 : 36,
           color: 'inherit',
           justifyContent: 'center',
+          position: 'relative',
         }}
       >
         <Icon fontSize="small" aria-hidden />
+        {collapsed && badge && badge > 0 ? (
+          <Box
+            sx={{
+              position: 'absolute',
+              top: -2,
+              right: -2,
+              minWidth: 16,
+              height: 16,
+              px: 0.4,
+              borderRadius: 999,
+              bgcolor: '#2563eb',
+              color: '#fff',
+              fontSize: 10,
+              fontWeight: 700,
+              display: 'grid',
+              placeItems: 'center',
+              lineHeight: 1,
+            }}
+          >
+            {badge > 99 ? '99+' : badge}
+          </Box>
+        ) : null}
       </ListItemIcon>
       {collapsed ? null : (
         <ListItemText
-          primary={label}
-          slotProps={{ primary: { sx: { fontWeight: active ? 600 : 500, fontSize: '0.875rem' } } }}
+          primary={
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+              <Box component="span" sx={{ fontWeight: active ? 600 : 500, fontSize: '0.875rem' }}>
+                {label}
+              </Box>
+              {badge && badge > 0 ? (
+                <Box
+                  component="span"
+                  sx={{
+                    minWidth: 22,
+                    height: 20,
+                    px: 0.75,
+                    borderRadius: 999,
+                    bgcolor: active ? 'rgba(255,255,255,0.22)' : 'rgba(37,99,235,0.95)',
+                    color: '#fff',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {badge > 99 ? '99+' : badge}
+                </Box>
+              ) : null}
+            </Stack>
+          }
         />
       )}
     </ListItemButton>
@@ -83,7 +137,7 @@ function NavButton({
 
   if (!collapsed) return button
   return (
-    <Tooltip title={label} placement="right">
+    <Tooltip title={tip} placement="right">
       {button}
     </Tooltip>
   )
@@ -108,6 +162,28 @@ export function SidebarNav({
   const roleNames = user?.roles.map((role) => roleLabel(role, t)).join(', ')
   const leadRole = primaryRole(roles)
   const homePath = homePathForRoles(roles)
+  const [reminderCount, setReminderCount] = useState(0)
+  const showReminders = items.some((item) => item.id === 'reminders')
+
+  useEffect(() => {
+    if (!showReminders) {
+      setReminderCount(0)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const result = await api.get<LeadList>('/api/v1/leads?limit=500')
+        if (cancelled) return
+        setReminderCount(result.data.items.filter((lead) => Boolean(lead.next_followup_at)).length)
+      } catch {
+        if (!cancelled) setReminderCount(0)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [pathname, showReminders])
 
   return (
     <Stack sx={{ height: '100%' }}>
@@ -191,6 +267,7 @@ export function SidebarNav({
                     label={t(`navigation:items.${item.id}`)}
                     collapsed={collapsed}
                     active={isNavActive(pathname, item)}
+                    badge={item.id === 'reminders' ? reminderCount : undefined}
                     onNavigate={onNavigate}
                   />
                 ))}

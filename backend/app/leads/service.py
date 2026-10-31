@@ -13,12 +13,20 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.access.scope import record_is_in_scope, resolve_record_scope
+from app.audit.models import AuditLog
 from app.audit.service import record_audit
 from app.common.exceptions import AppError, ErrorCode
 from app.core.logging import log_event
 from app.lead_fields.service import normalize_extra_values
-from app.leads.models import PLAN_STEPS, Lead
-from app.leads.schemas import CreateLeadRequest, UpdateLeadRequest, normalize_priority, normalize_status
+from app.leads.models import Lead
+from app.leads.schemas import (
+    CreateLeadRequest,
+    LeadActivityItem,
+    LeadActivityList,
+    UpdateLeadRequest,
+    normalize_priority,
+    normalize_status,
+)
 from app.pipeline.service import assert_stage_key, entry_stage_key
 
 _PRIORITY_FILTER_VALUES: dict[str, tuple[str, ...]] = {
@@ -229,8 +237,8 @@ def list_leads(
         conditions.append(Lead.lead_source == filters.source.strip())
     if filters.project_id is not None:
         conditions.append(Lead.project_id == filters.project_id)
-    if filters.plan_step is not None and filters.plan_step in PLAN_STEPS:
-        conditions.append(Lead.plan_step == filters.plan_step)
+    if filters.plan_step is not None and filters.plan_step.strip():
+        conditions.append(Lead.plan_step == filters.plan_step.strip())
     if filters.exclude_lost:
         conditions.append(Lead.status.notin_(("lost", "Lost", "unqualified")))
     # Salespeople only work leads on projects they are assigned to (plus their own unscoped legacy rows).
@@ -318,7 +326,7 @@ def create_lead(
         created_by_id=actor.id,
         status=status_key,
         priority=payload.priority,
-        plan_step=payload.plan_step if payload.plan_step in PLAN_STEPS else "Day 1",
+        plan_step=(payload.plan_step or "Day 1").strip()[:40] or "Day 1",
         next_followup_at=payload.next_followup_at,
         extra_values=extras or None,
         is_deleted=False,
@@ -364,6 +372,13 @@ def update_lead(
         raise _validation("request", "REQUIRED", "Provide at least one field to update.")
     lead = _visible(db, actor, lead_id)
     changed: list[str] = []
+    changes: dict[str, Any] = {}
+    before_status = lead.status
+    before_priority = lead.priority
+    before_plan = lead.plan_step
+    before_due = lead.next_followup_at
+    before_owner = lead.owner_id
+    before_requirement = lead.requirement or ""
 
     if "full_name" in fields:
         if payload.full_name is None:
@@ -394,6 +409,11 @@ def update_lead(
     if "requirement" in fields:
         lead.requirement = payload.requirement
         changed.append("requirement")
+        new_req = payload.requirement or ""
+        if new_req.startswith(before_requirement) and len(new_req) > len(before_requirement):
+            appended = new_req[len(before_requirement) :].strip()
+            if appended:
+                changes["note"] = appended.lstrip("\n")
     if "expected_value" in fields:
         lead.expected_value = payload.expected_value
         changed.append("expected_value")
@@ -405,24 +425,35 @@ def update_lead(
             raise _validation("status", "REQUIRED", "Status is required.")
         lead.status = assert_stage_key(db, lead.project_id, payload.status)
         changed.append("status")
+        if lead.status != before_status:
+            changes["status"] = {"from": before_status, "to": lead.status}
     if "priority" in fields:
         if payload.priority is None:
             raise _validation("priority", "REQUIRED", "Priority is required.")
         lead.priority = payload.priority
         changed.append("priority")
+        if lead.priority != before_priority:
+            changes["priority"] = {"from": before_priority, "to": lead.priority}
     if "plan_step" in fields:
-        if payload.plan_step is None or payload.plan_step not in PLAN_STEPS:
+        step = (payload.plan_step or "").strip()
+        if not step or len(step) > 40:
             raise _validation(
                 "plan_step",
                 "INVALID",
-                "Plan step must be Day 1, Day 3, Day 7, Day 21, 3-month review, or Custom.",
+                "Plan step must be 1–40 characters.",
             )
-        lead.plan_step = payload.plan_step
+        lead.plan_step = step
         changed.append("plan_step")
+        if lead.plan_step != before_plan:
+            changes["plan_step"] = {"from": before_plan, "to": lead.plan_step}
     if "next_followup_at" in fields:
         # Null clears the due date (Skip on Follow-ups).
         lead.next_followup_at = payload.next_followup_at
         changed.append("next_followup_at")
+        changes["next_followup_at"] = {
+            "from": None if before_due is None else before_due.isoformat(),
+            "to": None if lead.next_followup_at is None else lead.next_followup_at.isoformat(),
+        }
     if "project_id" in fields:
         project = _project_for_lead(
             db,
@@ -457,9 +488,10 @@ def update_lead(
             )
             lead.owner_id = payload.owner_id
             changed.append("owner_id")
+            changes["owner_id"] = {"from": str(before_owner), "to": str(lead.owner_id)}
 
     lead.updated_at = datetime.now(UTC)
-    context: dict[str, Any] = {"fields": changed}
+    context: dict[str, Any] = {"fields": changed, "changes": changes}
     if "owner_id" in changed:
         context["owner_id"] = str(lead.owner_id)
     record_audit(
@@ -500,3 +532,119 @@ def delete_lead(
     db.refresh(lead)
     log_event(logger, "lead_deleted", actor_id=str(actor.id), lead_id=str(lead.id))
     return lead
+
+
+_STATUS_LABELS = {
+    "new": "New",
+    "contacted": "Contacted",
+    "in_progress": "In Progress",
+    "qualified": "Qualified",
+    "won": "Won",
+    "lost": "Lost",
+    "nurture": "Nurture",
+}
+_PRIORITY_LABELS = {
+    "high": "Hot",
+    "Hot": "Hot",
+    "medium": "Warm",
+    "Warm": "Warm",
+    "low": "Cold",
+    "Cold": "Cold",
+}
+
+
+def _label_status(value: str | None) -> str:
+    if not value:
+        return "—"
+    return _STATUS_LABELS.get(value, value.replace("_", " ").title())
+
+
+def _label_priority(value: str | None) -> str:
+    if not value:
+        return "—"
+    return _PRIORITY_LABELS.get(value, value)
+
+
+def _format_activity_message(action: str, context: dict[str, Any] | None) -> str:
+    ctx = context or {}
+    changes = ctx.get("changes") if isinstance(ctx.get("changes"), dict) else {}
+
+    if action == "lead_created":
+        return "Lead created and assigned"
+
+    if action == "lead_deleted":
+        return "Lead deleted"
+
+    if action != "lead_updated":
+        return action.replace("_", " ").capitalize()
+
+    note = changes.get("note")
+    if isinstance(note, str) and note.strip():
+        return note.strip()
+
+    status_change = changes.get("status")
+    if isinstance(status_change, dict) and status_change.get("from") != status_change.get("to"):
+        return (
+            f"Status changed {_label_status(str(status_change.get('from')))} → "
+            f"{_label_status(str(status_change.get('to')))}"
+        )
+
+    priority_change = changes.get("priority")
+    if isinstance(priority_change, dict) and priority_change.get("from") != priority_change.get("to"):
+        return (
+            f"Priority changed from {_label_priority(str(priority_change.get('from')))} "
+            f"to {_label_priority(str(priority_change.get('to')))}"
+        )
+
+    plan_change = changes.get("plan_step")
+    if isinstance(plan_change, dict) and plan_change.get("from") != plan_change.get("to"):
+        return f"Plan step {plan_change.get('from')} → {plan_change.get('to')}"
+
+    due_change = changes.get("next_followup_at")
+    if isinstance(due_change, dict):
+        to_due = due_change.get("to")
+        if to_due is None:
+            return "Follow-up cleared"
+        day = str(to_due)[:10]
+        return f"Follow-up moved to {day}"
+
+    owner_change = changes.get("owner_id")
+    if isinstance(owner_change, dict):
+        return "Lead reassigned"
+
+    fields = ctx.get("fields")
+    if isinstance(fields, list) and fields:
+        return f"Updated {', '.join(str(field) for field in fields[:4])}"
+
+    return "Lead updated"
+
+
+def list_lead_activity(
+    db: Session,
+    *,
+    actor: User,
+    lead_id: uuid.UUID,
+    limit: int = 50,
+) -> LeadActivityList:
+    _visible(db, actor, lead_id)
+    rows = db.scalars(
+        select(AuditLog)
+        .where(AuditLog.target_type == "lead", AuditLog.target_id == lead_id)
+        .order_by(AuditLog.created_at.desc())
+        .limit(limit)
+    ).all()
+    actor_ids = {row.actor_id for row in rows if row.actor_id is not None}
+    names: dict[uuid.UUID, str] = {}
+    if actor_ids:
+        for user in db.scalars(select(User).where(User.id.in_(actor_ids))).all():
+            names[user.id] = user.full_name
+    items = [
+        LeadActivityItem(
+            id=str(row.id),
+            actor_name=names.get(row.actor_id, "System") if row.actor_id else "System",
+            at=row.created_at,
+            message=_format_activity_message(row.action, row.context),
+        )
+        for row in rows
+    ]
+    return LeadActivityList(items=items)
