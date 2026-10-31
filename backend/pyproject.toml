@@ -1,6 +1,6 @@
 [project]
-name = "onlinetution-api"
-version = "0.1.0"
+name = "aadi-crm-api"
+version = "1.0.0"
 description = "Authentication and role-based access foundation for Aadi CRM"
 requires-python = ">=3.12"
 dependencies = [

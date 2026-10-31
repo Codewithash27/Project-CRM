@@ -67,7 +67,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
         title="Aadi CRM API",
-        version="0.1.0",
+        version="1.0.0",
         summary="Authentication, access management, and leads API for Aadi CRM",
         description=(
             "Cookie-based authentication foundation. Access and refresh tokens are HttpOnly cookies. "

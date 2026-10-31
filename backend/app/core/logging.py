@@ -60,12 +60,12 @@ class JsonFormatter(logging.Formatter):
 
 def configure_logging() -> None:
     root = logging.getLogger()
-    if any(getattr(handler, "_onlinetution", False) for handler in root.handlers):
+    if any(getattr(handler, "_aadi_crm", False) for handler in root.handlers):
         return
     handler = logging.StreamHandler()
     handler.setFormatter(JsonFormatter())
     handler.addFilter(RedactionFilter())
-    handler._onlinetution = True  # type: ignore[attr-defined]
+    handler._aadi_crm = True  # type: ignore[attr-defined]
     root.handlers.clear()
     root.addHandler(handler)
     root.setLevel(logging.INFO)

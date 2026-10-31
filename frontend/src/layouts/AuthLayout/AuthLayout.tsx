@@ -2,6 +2,8 @@ import { Box, Paper, Stack, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { Outlet } from 'react-router-dom'
 
+import { APP_VERSION_LABEL } from '../../config/version'
+
 const points = ['heroPointOwners', 'heroPointAdmins', 'heroPointSales'] as const
 
 function LogoMark() {
@@ -37,7 +39,7 @@ export function AuthLayout() {
       sx={{
         minHeight: '100vh',
         display: 'grid',
-        gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(320px, 40%) minmax(0, 1fr)' },
+        gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(320px, 42%) minmax(0, 1fr)' },
         bgcolor: 'background.default',
       }}
     >
@@ -49,8 +51,9 @@ export function AuthLayout() {
           color: '#fff',
           display: 'flex',
           flexDirection: 'column',
-          gap: { xs: 1, md: 2.25 },
-          p: { xs: '22px 18px 20px', md: '48px 44px' },
+          justifyContent: { md: 'center' },
+          gap: { xs: 1.5, md: 2.5 },
+          p: { xs: '22px 20px 20px', md: '56px 48px' },
           background: 'linear-gradient(150deg, #172554 0%, #1d4ed8 55%, #6366f1 100%)',
           '&::before, &::after': {
             content: '""',
@@ -72,7 +75,6 @@ export function AuthLayout() {
             position: 'relative',
             zIndex: 1,
             m: 0,
-            mt: { xs: 0.75, md: 2.25 },
             color: '#fff',
             fontWeight: 600,
             letterSpacing: '-0.01em',
@@ -84,7 +86,7 @@ export function AuthLayout() {
           <br />
           {t('heroTitleLine2')}
         </Typography>
-        <Typography sx={{ position: 'relative', zIndex: 1, m: 0, color: '#dbeafe', maxWidth: '36ch' }}>
+        <Typography sx={{ position: 'relative', zIndex: 1, m: 0, color: '#dbeafe', maxWidth: '36ch', lineHeight: 1.5 }}>
           {t('heroLead')}
         </Typography>
         <Box
@@ -95,10 +97,11 @@ export function AuthLayout() {
             zIndex: 1,
             listStyle: 'none',
             p: 0,
-            m: '8px 0 0',
-            gap: 1.25,
+            m: 0,
+            gap: 1.5,
             fontSize: 14,
             color: '#e0e7ff',
+            lineHeight: 1.45,
           }}
         >
           {points.map((key) => (
@@ -109,7 +112,7 @@ export function AuthLayout() {
                   flex: 'none',
                   width: 18,
                   height: 18,
-                  mt: '1px',
+                  mt: '2px',
                   borderRadius: '50%',
                   bgcolor: 'rgba(255,255,255,0.2)',
                   backgroundImage:
@@ -123,27 +126,55 @@ export function AuthLayout() {
             </Box>
           ))}
         </Box>
+        <Typography
+          sx={{
+            display: { xs: 'none', md: 'block' },
+            position: 'relative',
+            zIndex: 1,
+            mt: 'auto',
+            pt: 4,
+            m: 0,
+            fontSize: 12,
+            color: 'rgba(219, 234, 254, 0.72)',
+            letterSpacing: '0.02em',
+          }}
+        >
+          {t('releaseVersion', { version: APP_VERSION_LABEL })}
+        </Typography>
       </Box>
 
-      <Stack
-        spacing={2}
+      <Box
         sx={{
           minWidth: 0,
-          width: '100%',
-          maxWidth: 560,
-          alignSelf: 'center',
-          justifySelf: 'center',
-          p: { xs: '20px 14px 32px', md: '48px 44px' },
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          p: { xs: '24px 16px 28px', md: '48px 40px' },
         }}
       >
-        <Paper
-          data-testid="auth-card"
-          variant="outlined"
-          sx={{ p: { xs: 2.5, sm: 4 }, width: '100%', borderRadius: '16px' }}
-        >
-          <Outlet />
-        </Paper>
-      </Stack>
+        <Stack spacing={2} sx={{ width: '100%', maxWidth: 420 }}>
+          <Paper
+            data-testid="auth-card"
+            variant="outlined"
+            sx={{
+              width: '100%',
+              borderRadius: '16px',
+              p: { xs: 3, sm: 4 },
+              boxShadow: '0 10px 30px rgba(15, 23, 42, 0.06)',
+            }}
+          >
+            <Outlet />
+          </Paper>
+          <Typography
+            component="p"
+            textAlign="center"
+            sx={{ m: 0, fontSize: 12, color: 'text.secondary', letterSpacing: '0.02em' }}
+          >
+            {t('releaseVersion', { version: APP_VERSION_LABEL })}
+          </Typography>
+        </Stack>
+      </Box>
     </Box>
   )
 }

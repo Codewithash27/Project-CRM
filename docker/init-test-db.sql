@@ -1,1 +1,1 @@
-CREATE DATABASE onlinetution_test OWNER onlinetution;
+CREATE DATABASE aadi_crm_test OWNER aadi_crm;

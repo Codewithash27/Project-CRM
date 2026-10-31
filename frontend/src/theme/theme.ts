@@ -86,14 +86,56 @@ export const theme = createTheme({
         root: { borderRadius: 999, fontWeight: 500, fontSize: 12 },
       },
     },
+    MuiTextField: {
+      defaultProps: { size: 'medium', variant: 'outlined' },
+    },
     MuiOutlinedInput: {
       styleOverrides: {
         root: {
           borderRadius: 8,
           backgroundColor: '#ffffff',
+          minHeight: 48,
+          alignItems: 'center',
           '& .MuiOutlinedInput-notchedOutline': { borderColor: '#cbd5e1' },
           '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#94a3b8' },
           '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#1d4ed8', borderWidth: 1 },
+        },
+        input: {
+          padding: '13px 14px',
+          lineHeight: 1.5,
+          boxSizing: 'border-box',
+        },
+      },
+    },
+    MuiInputLabel: {
+      styleOverrides: {
+        root: {
+          lineHeight: 1.4,
+        },
+        outlined: {
+          '&.MuiInputLabel-shrink': {
+            transform: 'translate(14px, -9px) scale(0.75)',
+          },
+        },
+      },
+    },
+    MuiFormControlLabel: {
+      styleOverrides: {
+        root: {
+          marginLeft: -2,
+          marginRight: 0,
+          alignItems: 'center',
+        },
+        label: {
+          fontSize: '0.875rem',
+          color: '#334155',
+        },
+      },
+    },
+    MuiCheckbox: {
+      styleOverrides: {
+        root: {
+          padding: 6,
         },
       },
     },
