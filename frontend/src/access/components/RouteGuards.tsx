@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom'
 
 import { LoadingScreen } from '../../components/common/LoadingScreen'
+import { homePathForRoles } from '../../layouts/AppLayout/nav'
 import { useAuth } from '../../store/auth-context'
 import type { ReactNode } from 'react'
 
@@ -16,12 +17,12 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
 }
 
 export function GuestRoute({ children }: { children: ReactNode }) {
-  const { status } = useAuth()
+  const { status, user } = useAuth()
   if (status === 'loading') {
     return <LoadingScreen />
   }
   if (status === 'authenticated') {
-    return <Navigate to="/app" replace />
+    return <Navigate to={homePathForRoles(user?.roles ?? [])} replace />
   }
   return children
 }

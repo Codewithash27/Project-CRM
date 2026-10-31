@@ -75,6 +75,25 @@ export function primaryRole(roles: readonly string[]): string | null {
   return ROLE_RANK.find((role) => roles.includes(role)) ?? roles[0] ?? null
 }
 
+/** First screen after login / brand click — not a shared Workspace for every role. */
+export function homePathForRoles(roles: readonly string[]): string {
+  const role = primaryRole(roles)
+  switch (role) {
+    case 'SUPER_ADMIN':
+      return '/app/businesses'
+    case 'BUSINESS_OWNER':
+      return '/app'
+    case 'SALESPERSON':
+      return '/app/projects'
+    case 'MARKETING':
+      return '/app/campaigns'
+    default: {
+      const first = visibleNav(roles)[0]
+      return first?.path ?? '/app'
+    }
+  }
+}
+
 export function visibleNav(roles: readonly string[], permissions: readonly string[] = []): NavItem[] {
   return NAV_ITEMS.filter((item) => {
     if (item.always) return true

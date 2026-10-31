@@ -20,16 +20,28 @@ import { LoadingScreen } from '../../components/common/LoadingScreen'
 import { NotFoundPage } from '../../components/common/NotFoundPage'
 import { AppLayout } from '../../layouts/AppLayout/AppLayout'
 import { AuthLayout } from '../../layouts/AuthLayout/AuthLayout'
-import { NAV_ITEMS } from '../../layouts/AppLayout/nav'
+import { NAV_ITEMS, homePathForRoles } from '../../layouts/AppLayout/nav'
 import { NavPlaceholder } from '../../layouts/AppLayout/NavPlaceholder'
 import { useAuth } from '../../store/auth-context'
 
 function RootRedirect() {
-  const { status } = useAuth()
+  const { status, user } = useAuth()
   if (status === 'loading') {
     return <LoadingScreen />
   }
-  return <Navigate to={status === 'authenticated' ? '/app' : '/login'} replace />
+  if (status === 'authenticated') {
+    return <Navigate to={homePathForRoles(user?.roles ?? [])} replace />
+  }
+  return <Navigate to="/login" replace />
+}
+
+function HomeIndex() {
+  const { user } = useAuth()
+  const roles = user?.roles ?? []
+  if (!roles.includes('BUSINESS_OWNER')) {
+    return <Navigate to={homePathForRoles(roles)} replace />
+  }
+  return <HomePage />
 }
 
 export function AppRoutes() {
@@ -43,7 +55,7 @@ export function AppRoutes() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
       </Route>
       <Route path="/app" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-        <Route index element={<HomePage />} />
+        <Route index element={<HomeIndex />} />
         <Route path="access-denied" element={<AccessDeniedPage />} />
         <Route
           path="businesses"

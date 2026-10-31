@@ -18,7 +18,7 @@ export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated'
 interface AuthContextValue {
   status: AuthStatus
   user: UserProfile | null
-  login: (input: LoginInput) => Promise<void>
+  login: (input: LoginInput) => Promise<UserProfile>
   register: (input: RegisterInput) => Promise<string>
   logout: () => Promise<void>
   refreshUser: () => Promise<UserProfile | null>
@@ -85,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await api.post<UserProfile>('/api/v1/auth/login', input)
     setUser(result.data)
     setStatus('authenticated')
+    return result.data
   }, [])
 
   const register = useCallback(async (input: RegisterInput) => {

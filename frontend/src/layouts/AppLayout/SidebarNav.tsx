@@ -17,7 +17,7 @@ import { Link as RouterLink, useLocation } from 'react-router-dom'
 
 import { roleLabel } from '../../access/role-label'
 import { useAuth } from '../../store/auth-context'
-import { SECTIONS, isNavActive, primaryRole, visibleNav, type NavItem } from './nav'
+import { SECTIONS, homePathForRoles, isNavActive, primaryRole, visibleNav, type NavItem } from './nav'
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -103,9 +103,11 @@ export function SidebarNav({
   const { t } = useTranslation(['navigation', 'access'])
   const { user } = useAuth()
   const { pathname } = useLocation()
-  const items = visibleNav(user?.roles ?? [], user?.permissions ?? [])
+  const roles = user?.roles ?? []
+  const items = visibleNav(roles, user?.permissions ?? [])
   const roleNames = user?.roles.map((role) => roleLabel(role, t)).join(', ')
-  const leadRole = primaryRole(user?.roles ?? [])
+  const leadRole = primaryRole(roles)
+  const homePath = homePathForRoles(roles)
 
   return (
     <Stack sx={{ height: '100%' }}>
@@ -132,7 +134,7 @@ export function SidebarNav({
           <Box sx={{ minWidth: 0, flex: 1 }}>
             <Typography
               component={RouterLink}
-              to="/app"
+              to={homePath}
               onClick={onNavigate}
               sx={{
                 display: 'block',

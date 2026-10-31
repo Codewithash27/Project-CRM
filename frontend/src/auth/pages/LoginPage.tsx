@@ -17,6 +17,7 @@ import { usePasswordPolicy } from '../hooks/usePasswordPolicy'
 import { fieldMessages, messageForError } from '../validation/errors'
 import { isEmail } from '../validation/password'
 import { ErrorAlert } from '../../components/common/ErrorAlert'
+import { homePathForRoles } from '../../layouts/AppLayout/nav'
 import { ApiError } from '../../services/api/errors'
 import { useAuth } from '../../store/auth-context'
 
@@ -47,8 +48,8 @@ export function LoginPage() {
     }
     setSubmitting(true)
     try {
-      await login({ email: email.trim(), password, remember_me: rememberMe })
-      navigate('/app', { replace: true })
+      const profile = await login({ email: email.trim(), password, remember_me: rememberMe })
+      navigate(homePathForRoles(profile.roles), { replace: true })
     } catch (error) {
       if (error instanceof ApiError && error.details.length > 0) {
         setErrors(fieldMessages(error, t, policy))
