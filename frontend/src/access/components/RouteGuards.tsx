@@ -45,3 +45,23 @@ export function PermissionRoute({
   }
   return children
 }
+
+export function RoleRoute({
+  roles,
+  children,
+}: {
+  roles: readonly string[]
+  children: ReactNode
+}) {
+  const { status, user } = useAuth()
+  if (status === 'loading') {
+    return <LoadingScreen />
+  }
+  if (status !== 'authenticated') {
+    return <Navigate to="/login" replace />
+  }
+  if (!user?.roles.some((role) => roles.includes(role))) {
+    return <Navigate to="/app/access-denied" replace />
+  }
+  return children
+}

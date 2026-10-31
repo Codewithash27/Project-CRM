@@ -1,8 +1,9 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 
-import { GuestRoute, PermissionRoute, ProtectedRoute } from '../../access/components/RouteGuards'
+import { GuestRoute, PermissionRoute, ProtectedRoute, RoleRoute } from '../../access/components/RouteGuards'
 import { AccessDeniedPage } from '../../access/pages/AccessDeniedPage'
 import { HomePage } from '../../access/pages/HomePage'
+import { BusinessesPage } from '../../businesses/pages/BusinessesPage'
 import { LeadFieldsPage } from '../../lead-fields/pages/LeadFieldsPage'
 import { LeadsPage } from '../../leads/pages/LeadsPage'
 import { PipelinePage } from '../../pipeline/pages/PipelinePage'
@@ -44,6 +45,14 @@ export function AppRoutes() {
       <Route path="/app" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route index element={<HomePage />} />
         <Route path="access-denied" element={<AccessDeniedPage />} />
+        <Route
+          path="businesses"
+          element={
+            <RoleRoute roles={['SUPER_ADMIN']}>
+              <BusinessesPage />
+            </RoleRoute>
+          }
+        />
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="team" element={<TeamPage />} />
         <Route path="leads" element={<LeadsPage />} />
@@ -77,7 +86,8 @@ export function AppRoutes() {
             item.id !== 'leads' &&
             item.id !== 'leadFields' &&
             item.id !== 'pipeline' &&
-            item.id !== 'reminders',
+            item.id !== 'reminders' &&
+            item.id !== 'businesses',
         ).map((item) => (
           <Route key={item.id} path={item.path.replace('/app/', '')} element={<NavPlaceholder id={item.id} />} />
         ))}
