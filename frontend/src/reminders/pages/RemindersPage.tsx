@@ -1,7 +1,10 @@
 import AddOutlinedIcon from '@mui/icons-material/AddOutlined'
 import CheckIcon from '@mui/icons-material/Check'
-import MoreVertIcon from '@mui/icons-material/MoreVert'
+import EventOutlinedIcon from '@mui/icons-material/EventOutlined'
+import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined'
 import PhoneInTalkOutlinedIcon from '@mui/icons-material/PhoneInTalkOutlined'
+import PhoneMissedOutlinedIcon from '@mui/icons-material/PhoneMissedOutlined'
+import SnoozeOutlinedIcon from '@mui/icons-material/SnoozeOutlined'
 import TodayOutlinedIcon from '@mui/icons-material/TodayOutlined'
 import {
   Box,
@@ -14,7 +17,6 @@ import {
   DialogTitle,
   Drawer,
   IconButton,
-  Menu,
   MenuItem,
   Stack,
   TextField,
@@ -79,6 +81,19 @@ const PRI_TONE: Record<LeadPriority, { bg: string; color: string }> = {
 const PRI_RANK: Record<LeadPriority, number> = { high: 0, medium: 1, low: 2 }
 const STEP_PALETTE = ['#ec4899', '#8b5cf6', '#10b981', '#f59e0b', '#3b82f6', '#64748b', '#0ea5e9', '#f43f5e']
 
+const REMINDER_ROW_COLS = {
+  xs: '22px minmax(0,1fr)',
+  md: '22px minmax(0,1fr) 118px 84px 100px 108px 168px',
+} as const
+
+const actionIconSx = {
+  width: 30,
+  height: 30,
+  borderRadius: '8px',
+  color: 'text.secondary',
+  '&:hover': { bgcolor: '#eef2f7', color: 'text.primary' },
+} as const
+
 function stepColor(label: string, plan: FollowupPlanStep[]) {
   const index = plan.findIndex((step) => step.label === label)
   if (label === CUSTOM_STEP) return STEP_PALETTE[5]
@@ -114,8 +129,6 @@ export function RemindersPage() {
   const [addNotes, setAddNotes] = useState('')
   const [callLead, setCallLead] = useState<Lead | null>(null)
   const [callSummary, setCallSummary] = useState('')
-  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null)
-  const [menuLead, setMenuLead] = useState<Lead | null>(null)
   const [rescheduleLead, setRescheduleLead] = useState<Lead | null>(null)
   const [rescheduleDate, setRescheduleDate] = useState(() => isoToDateInput(addDaysIso(null, 1)))
   const [drawerLeadId, setDrawerLeadId] = useState<string | null>(null)
@@ -238,13 +251,7 @@ export function RemindersPage() {
     }
   }
 
-  function closeMenu() {
-    setMenuAnchor(null)
-    setMenuLead(null)
-  }
-
   function openLead(lead: Lead) {
-    closeMenu()
     setDrawerLeadId(lead.id)
   }
 
@@ -262,7 +269,6 @@ export function RemindersPage() {
   )
 
   async function snoozeLead(lead: Lead) {
-    closeMenu()
     await patchLead(
       lead.id,
       { next_followup_at: addDaysIso(lead.next_followup_at, 1) },
@@ -271,7 +277,6 @@ export function RemindersPage() {
   }
 
   async function markNoAnswer(lead: Lead) {
-    closeMenu()
     const note = 'No answer'
     const requirement = lead.requirement ? `${lead.requirement}\n${note}` : note
     await patchLead(
@@ -529,188 +534,276 @@ export function RemindersPage() {
             <Typography color="text.secondary">No reminders match these filters.</Typography>
           </Box>
         ) : (
-          pageRows.map((lead) => {
-            const bucket = followWhen(lead.next_followup_at) ?? 'u'
-            const tone = WHEN_CHIP[bucket]
-            const priorityKey: LeadPriority = lead.priority in PRI_TONE ? lead.priority : 'medium'
-            const pri = PRI_TONE[priorityKey]
-            const on = selected.includes(lead.id)
-            const step = lead.plan_step || plan[0]?.label || 'Day 1'
-            const color = stepColor(step, plan)
-            const projectBit = lead.project_name ? ` · ${lead.project_name}` : ''
-            return (
-              <Box
-                key={lead.id}
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: {
-                    xs: '22px minmax(0,1fr)',
-                    md: '22px minmax(0,2.4fr) minmax(126px,1fr) minmax(62px,.5fr) minmax(96px,.9fr) minmax(92px,.8fr) 78px',
-                  },
-                  gap: { xs: '8px 10px', md: 1.5 },
-                  alignItems: { xs: 'start', md: 'center' },
-                  px: 2,
-                  py: 1.5,
-                  borderBottom: '1px solid #edf1f7',
-                  bgcolor: on ? '#eff6ff' : 'transparent',
-                  '&:hover': { bgcolor: on ? '#eff6ff' : '#f8fbff' },
+          <>
+            <Box
+              sx={{
+                display: { xs: 'none', md: 'grid' },
+                gridTemplateColumns: REMINDER_ROW_COLS.md,
+                columnGap: 1.25,
+                alignItems: 'center',
+                width: '100%',
+                px: 2,
+                py: 1,
+                borderBottom: '1px solid #dbe3ee',
+                bgcolor: '#f8fafc',
+              }}
+            >
+              <Checkbox
+                size="small"
+                disabled={!canUpdate}
+                checked={pageRows.length > 0 && pageRows.every((lead) => selected.includes(lead.id))}
+                indeterminate={
+                  pageRows.some((lead) => selected.includes(lead.id)) &&
+                  !pageRows.every((lead) => selected.includes(lead.id))
+                }
+                onChange={() => {
+                  const ids = pageRows.map((lead) => lead.id)
+                  const allOn = ids.every((id) => selected.includes(id))
+                  setSelected((current) =>
+                    allOn ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])],
+                  )
                 }}
-              >
-                <Checkbox
-                  size="small"
-                  checked={on}
-                  disabled={!canUpdate}
-                  onChange={() => toggleSelect(lead.id)}
-                  inputProps={{ 'aria-label': `Select ${lead.full_name}` }}
-                  sx={{ p: 0.25 }}
-                />
+                inputProps={{ 'aria-label': 'Select all on page' }}
+                sx={{ p: 0.25 }}
+              />
+              <Typography variant="caption" fontWeight={700} color="text.secondary">
+                Lead
+              </Typography>
+              <Typography variant="caption" fontWeight={700} color="text.secondary">
+                Plan
+              </Typography>
+              <Typography variant="caption" fontWeight={700} color="text.secondary">
+                Priority
+              </Typography>
+              <Typography variant="caption" fontWeight={700} color="text.secondary">
+                Due
+              </Typography>
+              <Typography variant="caption" fontWeight={700} color="text.secondary">
+                Status
+              </Typography>
+              <Typography variant="caption" fontWeight={700} color="text.secondary" textAlign="right">
+                Actions
+              </Typography>
+            </Box>
 
-                <Stack
-                  direction="row"
-                  spacing={1.5}
+            {pageRows.map((lead) => {
+              const bucket = followWhen(lead.next_followup_at) ?? 'u'
+              const tone = WHEN_CHIP[bucket]
+              const priorityKey: LeadPriority = lead.priority in PRI_TONE ? lead.priority : 'medium'
+              const pri = PRI_TONE[priorityKey]
+              const on = selected.includes(lead.id)
+              const step = lead.plan_step || plan[0]?.label || 'Day 1'
+              const color = stepColor(step, plan)
+              return (
+                <Box
+                  key={lead.id}
                   onClick={() => openLead(lead)}
-                  sx={{ alignItems: 'center', minWidth: 0, cursor: 'pointer' }}
-                >
-                  <Box
-                    sx={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: '50%',
-                      flexShrink: 0,
-                      display: 'grid',
-                      placeItems: 'center',
-                      bgcolor: `color-mix(in srgb, ${color} 14%, #fff)`,
-                      color,
-                    }}
-                  >
-                    <PhoneInTalkOutlinedIcon sx={{ fontSize: 20 }} />
-                  </Box>
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography fontWeight={700} noWrap>
-                      {lead.full_name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" noWrap display="block">
-                      {lead.requirement || lead.company_name || 'Follow-up call'}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" noWrap display="block">
-                      {lead.lead_number}
-                      {projectBit} ·{' '}
-                      <Box component="span" sx={{ color: 'primary.main', fontWeight: 600 }}>
-                        {lead.mobile}
-                      </Box>
-                    </Typography>
-                  </Box>
-                </Stack>
-
-                <Chip
-                  size="small"
-                  label={step}
                   sx={{
-                    justifySelf: 'start',
-                    gridColumn: { xs: '2', md: 'auto' },
-                    bgcolor: `color-mix(in srgb, ${color} 12%, #fff)`,
-                    color,
-                    fontWeight: 600,
-                    borderRadius: '8px',
-                    ml: { xs: 7, md: 0 },
-                  }}
-                />
-                <Chip
-                  size="small"
-                  label={PRIORITY_LABEL[priorityKey]}
-                  sx={{
-                    justifySelf: 'start',
-                    gridColumn: { xs: '2', md: 'auto' },
-                    bgcolor: pri.bg,
-                    color: pri.color,
-                    fontWeight: 600,
-                    borderRadius: '999px',
-                    ml: { xs: 7, md: 0 },
-                  }}
-                />
-                <Stack
-                  direction="row"
-                  spacing={0.75}
-                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: REMINDER_ROW_COLS,
+                    columnGap: { xs: 1, md: 1.25 },
+                    rowGap: 0.75,
                     alignItems: 'center',
-                    gridColumn: { xs: '2', md: 'auto' },
-                    color: bucket === 'o' ? '#b91c1c' : bucket === 't' ? '#b45309' : '#334155',
-                    fontWeight: bucket === 'o' || bucket === 't' ? 600 : 500,
-                    fontSize: 13,
-                    whiteSpace: 'nowrap',
-                    ml: { xs: 7, md: 0 },
+                    width: '100%',
+                    px: 2,
+                    py: 1.1,
+                    borderBottom: '1px solid #edf1f7',
+                    bgcolor: on ? '#eff6ff' : 'transparent',
+                    cursor: 'pointer',
+                    '&:hover': { bgcolor: on ? '#eff6ff' : '#f8fbff' },
                   }}
                 >
-                  <TodayOutlinedIcon sx={{ fontSize: 15 }} />
-                  {formatDueLabel(lead.next_followup_at)}
-                </Stack>
-                <Chip
-                  size="small"
-                  label={tone.label}
-                  sx={{
-                    justifySelf: 'start',
-                    gridColumn: { xs: '2', md: 'auto' },
-                    bgcolor: tone.bg,
-                    color: tone.color,
-                    fontWeight: 600,
-                    borderRadius: '8px',
-                    ml: { xs: 7, md: 0 },
-                  }}
-                />
+                  <Checkbox
+                    size="small"
+                    checked={on}
+                    disabled={!canUpdate}
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={() => toggleSelect(lead.id)}
+                    inputProps={{ 'aria-label': `Select ${lead.full_name}` }}
+                    sx={{ p: 0.25 }}
+                  />
 
-                {canUpdate ? (
+                  <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', minWidth: 0 }}>
+                    <Box
+                      sx={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: '50%',
+                        flexShrink: 0,
+                        display: 'grid',
+                        placeItems: 'center',
+                        bgcolor: `color-mix(in srgb, ${color} 14%, #fff)`,
+                        color,
+                      }}
+                    >
+                      <PhoneInTalkOutlinedIcon sx={{ fontSize: 20 }} />
+                    </Box>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography fontWeight={700} noWrap sx={{ color: '#0f172a' }}>
+                        {lead.full_name}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" noWrap>
+                        {lead.requirement || 'Follow-up call'}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" noWrap display="block">
+                        {lead.lead_number}
+                        {lead.project_name ? ` · ${lead.project_name}` : ''} ·{' '}
+                        <Box component="span" sx={{ color: 'primary.main', fontWeight: 600 }}>
+                          {lead.mobile}
+                        </Box>
+                      </Typography>
+                    </Box>
+                  </Stack>
+
+                  <Chip
+                    size="small"
+                    label={step}
+                    sx={{
+                      justifySelf: 'start',
+                      gridColumn: { xs: '2', md: 'auto' },
+                      ml: { xs: '54px', md: 0 },
+                      bgcolor: `color-mix(in srgb, ${color} 12%, #fff)`,
+                      color,
+                      fontWeight: 600,
+                      borderRadius: '999px',
+                    }}
+                  />
+                  <Chip
+                    size="small"
+                    label={PRIORITY_LABEL[priorityKey]}
+                    sx={{
+                      justifySelf: 'start',
+                      gridColumn: { xs: '2', md: 'auto' },
+                      ml: { xs: '54px', md: 0 },
+                      bgcolor: pri.bg,
+                      color: pri.color,
+                      fontWeight: 600,
+                      borderRadius: '999px',
+                    }}
+                  />
                   <Stack
                     direction="row"
-                    spacing={0.75}
+                    spacing={0.5}
                     sx={{
+                      alignItems: 'center',
                       gridColumn: { xs: '2', md: 'auto' },
-                      justifyContent: { xs: 'flex-start', md: 'flex-end' },
-                      ml: { xs: 7, md: 0 },
+                      ml: { xs: '54px', md: 0 },
+                      color: bucket === 'o' ? '#b91c1c' : bucket === 't' ? '#b45309' : '#334155',
+                      fontWeight: bucket === 'o' || bucket === 't' ? 600 : 500,
+                      fontSize: 13,
+                      whiteSpace: 'nowrap',
                     }}
                   >
-                    <IconButton
-                      size="small"
-                      color="primary"
-                      disabled={saving}
-                      aria-label={`Call done ${lead.full_name}`}
-                      onClick={() => {
-                        setCallLead(lead)
-                        setCallSummary('')
-                      }}
-                      sx={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: '10px',
-                        bgcolor: 'primary.main',
-                        color: '#fff',
-                        '&:hover': { bgcolor: 'primary.dark' },
-                      }}
-                    >
-                      <CheckIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      disabled={saving}
-                      aria-label={`More actions for ${lead.full_name}`}
-                      onClick={(event) => {
-                        setMenuAnchor(event.currentTarget)
-                        setMenuLead(lead)
-                      }}
-                      sx={{
-                        width: 30,
-                        height: 30,
-                        borderRadius: '8px',
-                        color: 'text.secondary',
-                        '&:hover': { bgcolor: '#eef2f7', color: 'text.primary' },
-                      }}
-                    >
-                      <MoreVertIcon fontSize="small" />
-                    </IconButton>
+                    <TodayOutlinedIcon sx={{ fontSize: 15 }} />
+                    {formatDueLabel(lead.next_followup_at)}
                   </Stack>
-                ) : null}
-              </Box>
-            )
-          })
+                  <Chip
+                    size="small"
+                    label={tone.label}
+                    sx={{
+                      justifySelf: 'start',
+                      gridColumn: { xs: '2', md: 'auto' },
+                      ml: { xs: '54px', md: 0 },
+                      bgcolor: tone.bg,
+                      color: tone.color,
+                      fontWeight: 600,
+                      borderRadius: '999px',
+                    }}
+                  />
+
+                  {canUpdate ? (
+                    <Stack
+                      direction="row"
+                      spacing={0.25}
+                      onClick={(event) => event.stopPropagation()}
+                      sx={{
+                        gridColumn: { xs: '2', md: 'auto' },
+                        justifyContent: { xs: 'flex-start', md: 'flex-end' },
+                        ml: { xs: '54px', md: 0 },
+                      }}
+                    >
+                      <Tooltip title="Done">
+                        <span>
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            disabled={saving}
+                            aria-label={`Call done ${lead.full_name}`}
+                            onClick={() => {
+                              setCallLead(lead)
+                              setCallSummary('')
+                            }}
+                            sx={{
+                              width: 30,
+                              height: 30,
+                              borderRadius: '8px',
+                              bgcolor: 'primary.main',
+                              color: '#fff',
+                              '&:hover': { bgcolor: 'primary.dark' },
+                            }}
+                          >
+                            <CheckIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title="Open lead">
+                        <IconButton
+                          size="small"
+                          aria-label={`Open ${lead.full_name}`}
+                          onClick={() => openLead(lead)}
+                          sx={actionIconSx}
+                        >
+                          <OpenInNewOutlinedIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="No answer">
+                        <span>
+                          <IconButton
+                            size="small"
+                            disabled={saving}
+                            aria-label={`No answer ${lead.full_name}`}
+                            onClick={() => void markNoAnswer(lead)}
+                            sx={actionIconSx}
+                          >
+                            <PhoneMissedOutlinedIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title="Snooze to tomorrow">
+                        <span>
+                          <IconButton
+                            size="small"
+                            disabled={saving}
+                            aria-label={`Snooze ${lead.full_name}`}
+                            onClick={() => void snoozeLead(lead)}
+                            sx={actionIconSx}
+                          >
+                            <SnoozeOutlinedIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title="Reschedule">
+                        <span>
+                          <IconButton
+                            size="small"
+                            disabled={saving}
+                            aria-label={`Reschedule ${lead.full_name}`}
+                            onClick={() => {
+                              setRescheduleLead(lead)
+                              setRescheduleDate(isoToDateInput(addDaysIso(lead.next_followup_at, 1)))
+                            }}
+                            sx={actionIconSx}
+                          >
+                            <EventOutlinedIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    </Stack>
+                  ) : null}
+                </Box>
+              )
+            })}
+          </>
         )}
 
         <Stack direction="row" spacing={1} sx={{ px: 2, py: 1.5, alignItems: 'center', color: 'text.secondary' }}>
@@ -821,48 +914,6 @@ export function RemindersPage() {
           </Stack>
         </Box>
       </Drawer>
-
-      <Menu
-        anchorEl={menuAnchor}
-        open={Boolean(menuAnchor)}
-        onClose={closeMenu}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{
-          paper: {
-            sx: {
-              minWidth: 180,
-              borderRadius: '12px',
-              border: '1px solid #e6e8ec',
-              boxShadow: '0 14px 30px rgba(15,23,42,.18)',
-              mt: 0.5,
-              py: 0.5,
-            },
-          },
-        }}
-      >
-        <MenuItem disabled={!menuLead} onClick={() => menuLead && openLead(menuLead)} sx={{ borderRadius: '8px', mx: 0.5, fontSize: 13 }}>
-          Open lead
-        </MenuItem>
-        <MenuItem disabled={saving || !menuLead} onClick={() => menuLead && void markNoAnswer(menuLead)} sx={{ borderRadius: '8px', mx: 0.5, fontSize: 13 }}>
-          No answer
-        </MenuItem>
-        <MenuItem disabled={saving || !menuLead} onClick={() => menuLead && void snoozeLead(menuLead)} sx={{ borderRadius: '8px', mx: 0.5, fontSize: 13 }}>
-          Snooze to tomorrow
-        </MenuItem>
-        <MenuItem
-          disabled={saving || !menuLead}
-          onClick={() => {
-            if (!menuLead) return
-            setRescheduleLead(menuLead)
-            setRescheduleDate(isoToDateInput(addDaysIso(menuLead.next_followup_at, 1)))
-            closeMenu()
-          }}
-          sx={{ borderRadius: '8px', mx: 0.5, fontSize: 13 }}
-        >
-          Reschedule
-        </MenuItem>
-      </Menu>
 
       <Dialog open={Boolean(callLead)} onClose={() => setCallLead(null)} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={(event) => void saveCallDone(event)}>
