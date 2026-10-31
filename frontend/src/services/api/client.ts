@@ -71,9 +71,10 @@ async function request<T>(
   path: string,
   body?: unknown,
   allowRetry = true,
+  formData = false,
 ): Promise<ApiSuccess<T>> {
   const headers: Record<string, string> = { Accept: 'application/json' }
-  if (body !== undefined) {
+  if (body !== undefined && !formData) {
     headers['Content-Type'] = 'application/json'
   }
   if (method !== 'GET' && method !== 'HEAD') {
@@ -91,7 +92,12 @@ async function request<T>(
       method,
       headers,
       credentials: 'include',
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body:
+        body === undefined
+          ? undefined
+          : formData
+            ? (body as FormData)
+            : JSON.stringify(body),
     })
   } catch {
     throw new ApiError('Network error. Check your connection and try again.', 0, 'NETWORK_ERROR')
@@ -102,7 +108,7 @@ async function request<T>(
     if (error.code === 'CSRF_VALIDATION_FAILED') {
       csrfToken = null
       await ensureCsrf()
-      return request(method, path, body, false)
+      return request(method, path, body, false, formData)
     }
     throw error
   }
@@ -110,7 +116,7 @@ async function request<T>(
   if (response.status === 401 && allowRetry && !refreshSkipped.has(path.split('?')[0] ?? path)) {
     const refreshed = await refreshSession()
     if (refreshed === 'ok') {
-      return request(method, path, body, false)
+      return request(method, path, body, false, formData)
     }
     if (refreshed === 'unauthorized') {
       unauthorizedHandler?.()
@@ -136,6 +142,7 @@ async function request<T>(
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
+  postForm: <T>(path: string, body: FormData) => request<T>('POST', path, body, true, true),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
   delete: <T>(path: string) => request<T>('DELETE', path),

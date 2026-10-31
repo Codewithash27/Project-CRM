@@ -204,6 +204,20 @@ class LeadListData(BaseModel):
     total: int
 
 
+class ImportLeadError(BaseModel):
+    row: int
+    message: str
+    name: str | None = None
+    mobile: str | None = None
+
+
+class ImportLeadsResult(BaseModel):
+    created: int
+    skipped: int
+    errors: list[ImportLeadError]
+    headers_seen: list[str]
+
+
 class LeadActivityItem(BaseModel):
     id: str
     actor_name: str

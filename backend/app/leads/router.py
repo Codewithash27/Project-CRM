@@ -3,14 +3,16 @@
 import uuid
 from datetime import date
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import client_ip, require_permission
 from app.common.responses import ApiResponse, error_responses
 from app.core.database import get_db
+from app.leads.import_service import import_leads_from_excel
 from app.leads.schemas import (
     CreateLeadRequest,
+    ImportLeadsResult,
     LeadActivityList,
     LeadListData,
     LeadPlanStep,
@@ -110,6 +112,40 @@ def get_leads(
         data=LeadListData(items=[_public(lead, names) for lead in leads], total=total),
         message="Success",
     )
+
+
+@router.post(
+    "/import",
+    response_model=ApiResponse[ImportLeadsResult],
+    summary="Import leads from Excel",
+    description=(
+        "Uploads an .xlsx file and creates leads for the given project. "
+        "Columns are matched by header name to common lead fields and the project's Lead Fields. "
+        "Repeated call-summary / follow-up columns are merged into Follow-up notes when that field exists. "
+        "Rows with a mobile that already exists in the company are skipped."
+    ),
+    responses=error_responses(401, 403, 422),
+)
+async def post_import_leads(
+    request: Request,
+    project_id: uuid.UUID = Form(...),
+    file: UploadFile = File(...),
+    actor: User = Depends(require_permission("leads.create")),
+    db: Session = Depends(get_db),
+) -> ApiResponse[ImportLeadsResult]:
+    raw = await file.read()
+    result = import_leads_from_excel(
+        db,
+        actor=actor,
+        project_id=project_id,
+        file_bytes=raw,
+        filename=file.filename or "leads.xlsx",
+        ip_address=client_ip(request),
+    )
+    message = f"Imported {result.created} lead(s)."
+    if result.skipped:
+        message = f"Imported {result.created} lead(s); skipped {result.skipped}."
+    return ApiResponse(data=result, message=message)
 
 
 @router.get(

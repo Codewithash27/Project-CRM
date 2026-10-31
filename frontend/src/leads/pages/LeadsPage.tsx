@@ -1,4 +1,6 @@
+import AddOutlinedIcon from '@mui/icons-material/AddOutlined'
 import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined'
+import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined'
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined'
 import TodayOutlinedIcon from '@mui/icons-material/TodayOutlined'
 import {
@@ -151,16 +153,40 @@ export function LeadsPage() {
   const [projectFilter, setProjectFilter] = useState('')
   const [saving, setSaving] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [importProjectId, setImportProjectId] = useState('')
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{
+    created: number
+    skipped: number
+    errors: { row: number; message: string; name?: string | null; mobile?: string | null }[]
+  } | null>(null)
   const [editLead, setEditLead] = useState<Lead | null>(null)
   const [form, setForm] = useState<LeadForm>(blankForm())
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [projectFields, setProjectFields] = useState<LeadField[]>([])
   const [listFields, setListFields] = useState<LeadField[]>([])
+  const importInputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    if (!notice) return
+    const timer = window.setTimeout(() => setNotice(''), 2200)
+    return () => window.clearTimeout(timer)
+  }, [notice])
 
   const activeFields = useMemo(
     () => projectFields.filter((field) => field.is_active),
     [projectFields],
   )
+
+  function closeImportDialog() {
+    if (importing) return
+    setImportOpen(false)
+    setImportFile(null)
+    setImportResult(null)
+    if (importInputRef.current) importInputRef.current.value = ''
+  }
 
   const fetchFields = useCallback(async (selected: string) => {
     if (!selected) return [] as LeadField[]
@@ -706,12 +732,8 @@ export function LeadsPage() {
 
   return (
     <Stack spacing={2.5}>
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        spacing={2}
-        sx={{ alignItems: { sm: 'flex-start' }, justifyContent: 'space-between' }}
-      >
-        <Stack spacing={0.5} sx={{ minWidth: 0 }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+        <Stack spacing={0.5} sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="h1">Leads</Typography>
           <Typography color="text.secondary">
             {isOwner
@@ -722,9 +744,61 @@ export function LeadsPage() {
           </Typography>
         </Stack>
         {canCreate ? (
-          <Button variant="contained" onClick={() => void openCreate()} sx={{ flexShrink: 0 }} disabled={isSales && projects.length === 0}>
-            + Create lead
-          </Button>
+          <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+            <Tooltip title="Import leads">
+              <span>
+                <IconButton
+                  size="small"
+                  color="primary"
+                  aria-label="Import leads"
+                  disabled={isSales && projects.length === 0}
+                  onClick={() => {
+                    setError('')
+                    setNotice('')
+                    setImportResult(null)
+                    setImportFile(null)
+                    if (importInputRef.current) importInputRef.current.value = ''
+                    setImportProjectId(projectFilter || projects[0]?.id || '')
+                    setImportOpen(true)
+                  }}
+                  sx={{
+                    bgcolor: '#fff',
+                    color: 'primary.main',
+                    width: 32,
+                    height: 32,
+                    borderRadius: '8px',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    '&:hover': { bgcolor: '#eef2ff' },
+                  }}
+                >
+                  <FileUploadOutlinedIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Create lead">
+              <span>
+                <IconButton
+                  size="small"
+                  color="primary"
+                  aria-label="Create lead"
+                  disabled={isSales && projects.length === 0}
+                  onClick={() => void openCreate()}
+                  sx={{
+                    bgcolor: 'primary.main',
+                    color: '#fff',
+                    width: 32,
+                    height: 32,
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 10px rgba(29,78,216,.2)',
+                    '&:hover': { bgcolor: 'primary.dark' },
+                  }}
+                >
+                  <AddOutlinedIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Stack>
         ) : null}
       </Stack>
 
@@ -736,9 +810,18 @@ export function LeadsPage() {
 
       {error ? <ErrorAlert message={error} /> : null}
       {notice ? (
-        <Typography color="success.main" variant="body2">
-          {notice}
-        </Typography>
+        <Box
+          sx={{
+            bgcolor: '#ecfdf5',
+            color: '#047857',
+            border: '1px solid #a7f3d0',
+            borderRadius: '12px',
+            px: 1.75,
+            py: 1.25,
+          }}
+        >
+          <Typography variant="body2">{notice}</Typography>
+        </Box>
       ) : null}
 
       <Box
@@ -946,6 +1029,158 @@ export function LeadsPage() {
           </>
         )}
       </Box>
+
+      <Dialog
+        open={importOpen}
+        onClose={closeImportDialog}
+        fullScreen={phone}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 1 }}>
+          <Box component="span" sx={{ flex: 1 }}>
+            Import leads
+          </Box>
+          <IconButton
+            aria-label="Close"
+            onClick={closeImportDialog}
+            edge="end"
+            size="small"
+            disabled={importing}
+          >
+            <CloseOutlinedIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              Upload an Excel .xlsx file. Columns are matched by header name to this project&apos;s Lead Fields.
+              Repeated call-summary columns merge into Follow-up notes.
+            </Typography>
+            <TextField
+              select
+              label="Project"
+              value={importProjectId}
+              onChange={(event) => setImportProjectId(event.target.value)}
+              required
+              fullWidth
+              disabled={importing}
+            >
+              {projects.map((project) => (
+                <MenuItem key={project.id} value={project.id}>
+                  {project.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              hidden
+              onChange={(event) => {
+                const next = event.target.files?.[0] ?? null
+                setImportFile(next)
+                setImportResult(null)
+              }}
+            />
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+              <Button
+                variant="outlined"
+                onClick={() => importInputRef.current?.click()}
+                disabled={importing}
+              >
+                Choose Excel file
+              </Button>
+              <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: 260 }}>
+                {importFile ? importFile.name : 'No file selected'}
+              </Typography>
+            </Stack>
+            {importResult ? (
+              <Stack spacing={1}>
+                <Alert severity={importResult.created > 0 ? 'success' : 'warning'}>
+                  Imported {importResult.created} lead(s)
+                  {importResult.skipped ? `; skipped ${importResult.skipped}` : ''}.
+                </Alert>
+                {importResult.errors.length > 0 ? (
+                  <Box
+                    sx={{
+                      maxHeight: 180,
+                      overflow: 'auto',
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: 1,
+                      px: 1.5,
+                      py: 1,
+                    }}
+                  >
+                    {importResult.errors.map((item) => (
+                      <Typography key={`${item.row}-${item.message}`} variant="body2" color="text.secondary">
+                        Row {item.row}
+                        {item.name ? ` (${item.name})` : ''}: {item.message}
+                      </Typography>
+                    ))}
+                  </Box>
+                ) : null}
+              </Stack>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeImportDialog} disabled={importing}>
+            Close
+          </Button>
+          <Button
+            variant="contained"
+            disabled={importing || !importProjectId || !importFile}
+            onClick={() => {
+              void (async () => {
+                if (!importFile || !importProjectId) return
+                setImporting(true)
+                setError('')
+                setNotice('')
+                try {
+                  const body = new FormData()
+                  body.append('project_id', importProjectId)
+                  body.append('file', importFile)
+                  const result = await api.postForm<{
+                    created: number
+                    skipped: number
+                    errors: { row: number; message: string; name?: string | null; mobile?: string | null }[]
+                  }>('/api/v1/leads/import', body)
+                  setImportResult(result.data)
+                  const message =
+                    result.message ||
+                    `Imported ${result.data.created} lead(s)${
+                      result.data.skipped ? `; skipped ${result.data.skipped}` : ''
+                    }.`
+                  // Full success: close dialog + short page toast. Partial: keep dialog open with row errors.
+                  if (result.data.errors.length === 0) {
+                    setImportOpen(false)
+                    setImportFile(null)
+                    setImportResult(null)
+                    if (importInputRef.current) importInputRef.current.value = ''
+                    setProjectFilter(importProjectId)
+                    setNotice(message)
+                  } else if (result.data.created > 0) {
+                    setProjectFilter(importProjectId)
+                  }
+                  await load()
+                } catch (requestError) {
+                  setError(
+                    requestError instanceof ApiError
+                      ? requestError.message
+                      : 'Could not import leads. Check the file and try again.',
+                  )
+                } finally {
+                  setImporting(false)
+                }
+              })()
+            }}
+          >
+            {importing ? 'Importing…' : 'Import'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={createOpen} onClose={closeCreateDialog} fullScreen={phone} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={(event) => void onCreate(event)}>
