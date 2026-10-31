@@ -1,6 +1,8 @@
 """KPI HTTP routes."""
 
-from fastapi import APIRouter, Depends
+import uuid
+
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import require_permission
@@ -17,11 +19,15 @@ router = APIRouter()
     "",
     response_model=ApiResponse[KpiOverviewData],
     summary="KPI overview",
-    description="Live counts and values for leads visible to the caller.",
+    description="Live counts and values for leads visible to the caller. Optional project_id filters to one project.",
     responses=error_responses(401, 403),
 )
 def get_kpis(
     actor: User = Depends(require_permission("leads.read")),
     db: Session = Depends(get_db),
+    project_id: uuid.UUID | None = Query(default=None),
 ) -> ApiResponse[KpiOverviewData]:
-    return ApiResponse(data=build_kpi_overview(db, actor=actor), message="Success")
+    return ApiResponse(
+        data=build_kpi_overview(db, actor=actor, project_id=project_id),
+        message="Success",
+    )

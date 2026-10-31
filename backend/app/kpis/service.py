@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from collections import Counter
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -45,16 +46,17 @@ def _won_value(lead: Lead) -> Decimal:
     return Decimal("0")
 
 
-def build_kpi_overview(db: Session, *, actor: User) -> KpiOverviewData:
+def build_kpi_overview(db: Session, *, actor: User, project_id: uuid.UUID | None = None) -> KpiOverviewData:
     # Pull full visible set in pages so totals are never first-page-only.
     items: list[Lead] = []
     offset = 0
     page = 500
+    filters = LeadFilters(project_id=project_id)
     while True:
         batch, total = list_leads(
             db,
             actor=actor,
-            filters=LeadFilters(),
+            filters=filters,
             limit=page,
             offset=offset,
         )

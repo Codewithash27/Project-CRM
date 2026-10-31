@@ -17,7 +17,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ErrorAlert } from '../../components/common/ErrorAlert'
 import { LoadingScreen } from '../../components/common/LoadingScreen'
 import { addDaysIso, followWhen, formatDueLabel } from '../../leads/lead-dates'
-import { Lead, LeadList, PRIORITY_LABEL, PRIORITY_TONE, type LeadPriority } from '../../leads/types'
+import {
+  Lead,
+  LeadList,
+  LeadProjectOption,
+  PRIORITY_LABEL,
+  PRIORITY_TONE,
+  type LeadPriority,
+} from '../../leads/types'
 import { ApiError } from '../../services/api/errors'
 import { api } from '../../services/api/client'
 import { useAuth } from '../../store/auth-context'
@@ -60,19 +67,33 @@ export function FollowUpsPage() {
   const canUpdate = Boolean(user?.permissions.includes('leads.update'))
 
   const [items, setItems] = useState<Lead[]>([])
+  const [projects, setProjects] = useState<LeadProjectOption[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [projectId, setProjectId] = useState('')
   const [step, setStep] = useState('')
   const [saving, setSaving] = useState(false)
   const [tally, setTally] = useState<SessionTally>({ connected: 0, noAnswer: 0, snoozed: 0, skipped: 0 })
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null)
   const [menuLead, setMenuLead] = useState<Lead | null>(null)
 
+  useEffect(() => {
+    void (async () => {
+      try {
+        const result = await api.get<{ items: LeadProjectOption[] }>('/api/v1/projects')
+        setProjects(result.data.items)
+      } catch {
+        setProjects([])
+      }
+    })()
+  }, [])
+
   const load = useCallback(async () => {
     setError('')
     try {
       const params = new URLSearchParams({ limit: '200', exclude_lost: 'true' })
+      if (projectId) params.set('project_id', projectId)
       if (step) params.set('plan_step', step)
       const result = await api.get<LeadList>(`/api/v1/leads?${params}`)
       const rows = [...result.data.items].sort((a, b) => {
@@ -86,7 +107,7 @@ export function FollowUpsPage() {
     } finally {
       setLoading(false)
     }
-  }, [step])
+  }, [projectId, step])
 
   useEffect(() => {
     setLoading(true)
@@ -184,21 +205,42 @@ export function FollowUpsPage() {
         </Typography>
       ) : null}
 
-      <TextField
-        select
-        size="small"
-        label="Plan step"
-        value={step}
-        onChange={(event) => setStep(event.target.value)}
-        sx={{ maxWidth: { xs: '100%', sm: 280 } }}
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1.5}
+        sx={{ alignItems: { sm: 'flex-start' } }}
       >
-        <MenuItem value="">All steps</MenuItem>
-        {PLAN_STEPS.map((item) => (
-          <MenuItem key={item} value={item}>
-            {item}
-          </MenuItem>
-        ))}
-      </TextField>
+        <TextField
+          select
+          size="small"
+          label="Project"
+          value={projectId}
+          onChange={(event) => setProjectId(event.target.value)}
+          sx={{ minWidth: { xs: '100%', sm: 260 } }}
+        >
+          <MenuItem value="">All projects</MenuItem>
+          {projects.map((project) => (
+            <MenuItem key={project.id} value={project.id}>
+              {project.name}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          select
+          size="small"
+          label="Plan step"
+          value={step}
+          onChange={(event) => setStep(event.target.value)}
+          sx={{ minWidth: { xs: '100%', sm: 260 } }}
+        >
+          <MenuItem value="">All steps</MenuItem>
+          {PLAN_STEPS.map((item) => (
+            <MenuItem key={item} value={item}>
+              {item}
+            </MenuItem>
+          ))}
+        </TextField>
+      </Stack>
 
       <Box
         sx={{

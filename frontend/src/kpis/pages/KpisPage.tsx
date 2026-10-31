@@ -7,12 +7,13 @@ import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined'
 import StarOutlineIcon from '@mui/icons-material/StarOutline'
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import TodayOutlinedIcon from '@mui/icons-material/TodayOutlined'
-import { Box, Button, Stack, Typography } from '@mui/material'
+import { Box, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { useCallback, useEffect, useState } from 'react'
-import { Link as RouterLink, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 import { ErrorAlert } from '../../components/common/ErrorAlert'
 import { LoadingScreen } from '../../components/common/LoadingScreen'
+import type { LeadProjectOption } from '../../leads/types'
 import { ApiError } from '../../services/api/errors'
 import { api } from '../../services/api/client'
 
@@ -51,22 +52,39 @@ const STAGE_COLOR: Record<string, string> = {
 export function KpisPage() {
   const navigate = useNavigate()
   const [data, setData] = useState<KpiOverview | null>(null)
+  const [projects, setProjects] = useState<LeadProjectOption[]>([])
+  const [projectId, setProjectId] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const result = await api.get<{ items: LeadProjectOption[] }>('/api/v1/projects')
+        setProjects(result.data.items)
+      } catch {
+        setProjects([])
+      }
+    })()
+  }, [])
 
   const load = useCallback(async () => {
     setError('')
     try {
-      const result = await api.get<KpiOverview>('/api/v1/kpis')
+      const params = new URLSearchParams()
+      if (projectId) params.set('project_id', projectId)
+      const query = params.toString()
+      const result = await api.get<KpiOverview>(`/api/v1/kpis${query ? `?${query}` : ''}`)
       setData(result.data)
     } catch (requestError) {
       setError(requestError instanceof ApiError ? requestError.message : 'Could not load KPIs.')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [projectId])
 
   useEffect(() => {
+    setLoading(true)
     void load()
   }, [load])
 
@@ -82,17 +100,24 @@ export function KpisPage() {
         <Stack spacing={0.75} sx={{ minWidth: 0 }}>
           <Typography variant="h1">KPIs Overview</Typography>
           <Typography color="text.secondary" sx={{ maxWidth: 640, lineHeight: 1.55 }}>
-            Live snapshot of your visible leads. Open a card to jump to the related screen.
+            Live snapshot of your visible leads. Filter by project, then open a card to jump to related work.
           </Typography>
         </Stack>
-        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-          <Button component={RouterLink} to="/app/pipeline" variant="outlined">
-            View pipeline
-          </Button>
-          <Button component={RouterLink} to="/app/reminders" variant="outlined">
-            View reminders
-          </Button>
-        </Stack>
+        <TextField
+          select
+          size="small"
+          label="Project"
+          value={projectId}
+          onChange={(event) => setProjectId(event.target.value)}
+          sx={{ minWidth: { xs: '100%', sm: 260 }, flexShrink: 0 }}
+        >
+          <MenuItem value="">All projects</MenuItem>
+          {projects.map((project) => (
+            <MenuItem key={project.id} value={project.id}>
+              {project.name}
+            </MenuItem>
+          ))}
+        </TextField>
       </Stack>
 
       {error ? <ErrorAlert message={error} /> : null}
