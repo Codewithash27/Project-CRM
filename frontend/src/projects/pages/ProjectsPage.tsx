@@ -21,8 +21,6 @@ import { LoadingScreen } from '../../components/common/LoadingScreen'
 import { ApiError } from '../../services/api/errors'
 import { api } from '../../services/api/client'
 
-type TemplateId = 'GENERIC' | 'HIRING' | 'PANEERWALA' | 'PRESCHOOL' | 'SPACE-VIEW'
-
 interface CompanyOption {
   id: string
   name: string
@@ -48,14 +46,6 @@ interface ProjectList {
   items: ProjectItem[]
 }
 
-const TEMPLATES: { id: TemplateId; label: string; detail: string }[] = [
-  { id: 'GENERIC', label: 'Generic', detail: 'Basic fields and Expected Value.' },
-  { id: 'HIRING', label: 'Hiring', detail: 'Recruitment stage and outcome.' },
-  { id: 'PANEERWALA', label: 'Paneerwala', detail: 'Expected Value and Order Amount.' },
-  { id: 'PRESCHOOL', label: 'Preschool', detail: 'Admission enquiries and Expected Value.' },
-  { id: 'SPACE-VIEW', label: 'Space View', detail: 'Site is required, plus Expected Value.' },
-]
-
 function cleanCode(value: string) {
   return value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 12)
 }
@@ -76,7 +66,6 @@ export function ProjectsPage() {
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
   const [companyId, setCompanyId] = useState('')
-  const [template, setTemplate] = useState<TemplateId>('GENERIC')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
   const load = useCallback(async () => {
@@ -102,7 +91,6 @@ export function ProjectsPage() {
     [code, companyId, data?.items],
   )
   const preview = codeIsValid(code) ? `${code}-0001` : 'Enter a short code'
-  const chosenTemplate = TEMPLATES.find((item) => item.id === template)
 
   function closeForm() {
     if (saving) return
@@ -127,12 +115,11 @@ export function ProjectsPage() {
         name: name.trim(),
         code,
         company_id: companyId,
-        template,
+        template: 'GENERIC',
       })
       setData(result.data)
       setName('')
       setCode('')
-      setTemplate('GENERIC')
       setFieldErrors({})
       setOpen(false)
       setNotice(result.message)
@@ -292,46 +279,6 @@ export function ProjectsPage() {
                   </MenuItem>
                 ))}
               </TextField>
-              <Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  Template
-                </Typography>
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1 }}>
-                  {TEMPLATES.map((item) => {
-                    const selected = template === item.id
-                    return (
-                      <Button
-                        key={item.id}
-                        type="button"
-                        variant="outlined"
-                        aria-pressed={selected}
-                        disabled={saving}
-                        onClick={() => setTemplate(item.id)}
-                        sx={{
-                          justifyContent: 'flex-start',
-                          textAlign: 'left',
-                          py: 1.25,
-                          px: 1.5,
-                          height: 'auto',
-                          whiteSpace: 'normal',
-                          borderRadius: '12px',
-                          borderWidth: selected ? 2 : 1,
-                          borderColor: selected ? 'primary.main' : 'divider',
-                          bgcolor: selected ? '#eff6ff' : '#fff',
-                          '&:hover': { borderColor: 'primary.main', bgcolor: selected ? '#eff6ff' : '#fff' },
-                        }}
-                      >
-                        <Stack spacing={0.25} sx={{ alignItems: 'flex-start', minWidth: 0 }}>
-                          <Typography sx={{ fontWeight: 600, color: 'text.primary' }}>{item.label}</Typography>
-                          <Typography variant="caption" sx={{ color: 'text.secondary', textAlign: 'left' }}>
-                            {item.detail}
-                          </Typography>
-                        </Stack>
-                      </Button>
-                    )
-                  })}
-                </Box>
-              </Box>
               <Box
                 sx={{
                   p: 1.5,
@@ -345,9 +292,8 @@ export function ProjectsPage() {
                   First lead number: <b>{preview}</b>
                 </Typography>
                 <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-                  {selectedCompany ? selectedCompany.name : 'Choose a business.'} · {chosenTemplate?.label}
+                  {selectedCompany ? selectedCompany.name : 'Choose a business.'}
                 </Typography>
-                <Typography color="text.secondary">{chosenTemplate?.detail}</Typography>
                 {duplicate ? (
                   <Typography color="error" sx={{ mt: 0.75 }}>
                     This business already has a project with that short code.

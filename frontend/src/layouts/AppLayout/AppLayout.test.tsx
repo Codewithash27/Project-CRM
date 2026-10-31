@@ -1,5 +1,5 @@
 import { ThemeProvider } from '@mui/material'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -50,7 +50,7 @@ function renderShell(user: UserProfile, path = '/app') {
           <Routes>
             <Route path="/app" element={<AppLayout />}>
               <Route index element={<HomePage />} />
-              <Route path="leads" element={<NavPlaceholder id="leads" />} />
+              <Route path="follow-ups" element={<NavPlaceholder id="followUps" />} />
               <Route path="businesses" element={<NavPlaceholder id="businesses" />} />
               <Route path="access-denied" element={<div>Denied</div>} />
             </Route>
@@ -59,6 +59,12 @@ function renderShell(user: UserProfile, path = '/app') {
       </AuthContext.Provider>
     </ThemeProvider>,
   )
+}
+
+/** Permanent + keepMounted mobile drawers both mount nav; use the first Main navigation. */
+function sidebarLink(name: string | RegExp) {
+  const nav = screen.getAllByRole('navigation', { name: 'Main navigation' })[0]
+  return within(nav).getByRole('link', { name })
 }
 
 describe('AppLayout', () => {
@@ -80,18 +86,18 @@ describe('AppLayout', () => {
 
   it('shows a salesperson the lead menu and hides business setup', () => {
     renderShell(profile(['SALESPERSON']))
-    expect(screen.getByRole('link', { name: 'Reminders' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Leads' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Follow-ups' })).toBeInTheDocument()
+    expect(sidebarLink('Reminders')).toBeInTheDocument()
+    expect(sidebarLink('Leads')).toBeInTheDocument()
+    expect(sidebarLink('Follow-ups')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Businesses' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Team' })).not.toBeInTheDocument()
   })
 
   it('opens a holding screen from the sidebar', async () => {
     renderShell(profile(['SALESPERSON']))
-    await userEvent.click(screen.getByRole('link', { name: 'Leads' }))
+    await userEvent.click(sidebarLink('Follow-ups'))
     expect(await screen.findByText('Coming next')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Leads' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Follow-ups' })).toBeInTheDocument()
   })
 
   it('keeps a platform screen away from a salesperson', () => {

@@ -1,3 +1,4 @@
+import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined'
 import {
   Alert,
   Box,
@@ -7,6 +8,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
   MenuItem,
   Stack,
   Table,
@@ -141,6 +143,18 @@ export function UsersPage() {
     if (saving) return
     setCreateOpen(false)
     setFieldErrors({})
+  }
+
+  function closeRoleDialog() {
+    setRoleTarget(null)
+  }
+
+  function closeStatusDialog() {
+    setStatusTarget(null)
+  }
+
+  function closeDeleteDialog() {
+    setDeleteTarget(null)
   }
 
   async function onCreate(event: FormEvent) {
@@ -495,8 +509,15 @@ export function UsersPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={Boolean(roleTarget)} onClose={() => setRoleTarget(null)} aria-labelledby="change-role-title">
-        <DialogTitle id="change-role-title">{t('access:confirmRole')}</DialogTitle>
+      <Dialog open={Boolean(roleTarget)} onClose={closeRoleDialog} aria-labelledby="change-role-title">
+        <DialogTitle id="change-role-title" sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 1 }}>
+          <Box component="span" sx={{ flex: 1 }}>
+            {t('access:confirmRole')}
+          </Box>
+          <IconButton type="button" aria-label={t('common:close')} onClick={closeRoleDialog} edge="end" size="small">
+            <CloseOutlinedIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
         <DialogContent>
           {roleTarget ? (
             <Typography color="text.secondary" sx={{ mb: 1.5 }}>
@@ -519,26 +540,42 @@ export function UsersPage() {
           </TextField>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRoleTarget(null)}>{t('common:cancel')}</Button>
-          <Button variant="contained" onClick={() => void saveRole()}>
+          <Button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault()
+              closeRoleDialog()
+            }}
+          >
+            {t('common:cancel')}
+          </Button>
+          <Button type="button" variant="contained" onClick={() => void saveRole()}>
             {t('common:save')}
           </Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={Boolean(statusTarget)} onClose={() => setStatusTarget(null)} aria-labelledby="status-title">
+      <Dialog open={Boolean(statusTarget)} onClose={closeStatusDialog} aria-labelledby="status-title">
         <DialogTitle id="status-title">
           {statusTarget?.is_active ? t('access:confirmDeactivate') : t('access:confirmActivate')}
         </DialogTitle>
         <DialogActions>
-          <Button onClick={() => setStatusTarget(null)}>{t('common:cancel')}</Button>
-          <Button variant="contained" onClick={() => void saveStatus()}>
+          <Button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault()
+              closeStatusDialog()
+            }}
+          >
+            {t('common:cancel')}
+          </Button>
+          <Button type="button" variant="contained" onClick={() => void saveStatus()}>
             {t('common:save')}
           </Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} aria-labelledby="delete-user-title">
+      <Dialog open={Boolean(deleteTarget)} onClose={closeDeleteDialog} aria-labelledby="delete-user-title">
         <DialogTitle id="delete-user-title">{t('access:confirmDeleteUser')}</DialogTitle>
         <DialogContent>
           {deleteTarget ? (
@@ -548,8 +585,16 @@ export function UsersPage() {
           ) : null}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteTarget(null)}>{t('common:cancel')}</Button>
-          <Button color="error" variant="contained" onClick={() => void deleteUser()}>
+          <Button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault()
+              closeDeleteDialog()
+            }}
+          >
+            {t('common:cancel')}
+          </Button>
+          <Button type="button" color="error" variant="contained" onClick={() => void deleteUser()}>
             {t('access:deleteUser')}
           </Button>
         </DialogActions>

@@ -1,3 +1,4 @@
+import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined'
 import MoreVertIcon from '@mui/icons-material/MoreVert'
 import {
   Box,
@@ -92,6 +93,18 @@ export function PipelinePage() {
   const [deleteStage, setDeleteStage] = useState<PipelineStage | null>(null)
   const [moveToKey, setMoveToKey] = useState('')
   const [saving, setSaving] = useState(false)
+
+  function closeManageDialog() {
+    if (saving) return
+    setManageOpen(false)
+    setEditStage(null)
+    setStageForm(blankStageForm())
+  }
+
+  function closeDeleteStageDialog() {
+    if (saving) return
+    setDeleteStage(null)
+  }
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300)
@@ -539,8 +552,25 @@ export function PipelinePage() {
         ))}
       </Menu>
 
-      <Dialog open={manageOpen} onClose={() => setManageOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Manage stages · {selectedProject?.name ?? 'Project'}</DialogTitle>
+      <Dialog open={manageOpen} onClose={closeManageDialog} fullWidth maxWidth="sm">
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 1 }}>
+          <Box component="span" sx={{ flex: 1 }}>
+            Manage stages · {selectedProject?.name ?? 'Project'}
+          </Box>
+          <IconButton
+            type="button"
+            aria-label="Close"
+            onClick={(event) => {
+              event.preventDefault()
+              closeManageDialog()
+            }}
+            edge="end"
+            size="small"
+            disabled={saving}
+          >
+            <CloseOutlinedIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
         <DialogContent dividers>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             New is fixed for every project. Add or change the other columns for this project only.
@@ -674,7 +704,9 @@ export function PipelinePage() {
                 </Button>
                 {editStage ? (
                   <Button
-                    onClick={() => {
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault()
                       setEditStage(null)
                       setStageForm(blankStageForm())
                     }}
@@ -687,11 +719,20 @@ export function PipelinePage() {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setManageOpen(false)}>Close</Button>
+          <Button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault()
+              closeManageDialog()
+            }}
+            disabled={saving}
+          >
+            Close
+          </Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={Boolean(deleteStage)} onClose={() => setDeleteStage(null)} fullWidth maxWidth="xs">
+      <Dialog open={Boolean(deleteStage)} onClose={closeDeleteStageDialog} fullWidth maxWidth="xs">
         <DialogTitle>Remove {deleteStage?.label}?</DialogTitle>
         <DialogContent>
           {(deleteStage?.lead_count ?? 0) > 0 ? (
@@ -720,8 +761,18 @@ export function PipelinePage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteStage(null)}>Cancel</Button>
           <Button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault()
+              closeDeleteStageDialog()
+            }}
+            disabled={saving}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
             color="error"
             variant="contained"
             disabled={saving || ((deleteStage?.lead_count ?? 0) > 0 && !moveToKey)}

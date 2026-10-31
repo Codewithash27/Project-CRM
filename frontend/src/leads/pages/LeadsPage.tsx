@@ -1,3 +1,4 @@
+import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined'
 import {
   Alert,
   Box,
@@ -9,6 +10,7 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  IconButton,
   MenuItem,
   Stack,
   Table,
@@ -234,6 +236,16 @@ export function LeadsPage() {
     setFieldErrors({})
     await loadProjectFields(first)
     setCreateOpen(true)
+  }
+
+  function closeCreateDialog() {
+    if (saving) return
+    setCreateOpen(false)
+  }
+
+  function closeEditDialog() {
+    if (saving) return
+    setEditLead(null)
   }
 
   async function openEdit(lead: Lead) {
@@ -821,12 +833,38 @@ export function LeadsPage() {
         )}
       </Box>
 
-      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} fullScreen={phone} fullWidth maxWidth="sm">
+      <Dialog open={createOpen} onClose={closeCreateDialog} fullScreen={phone} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={(event) => void onCreate(event)}>
-          <DialogTitle>Create lead</DialogTitle>
+          <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 1 }}>
+            <Box component="span" sx={{ flex: 1 }}>
+              Create lead
+            </Box>
+            <IconButton
+              type="button"
+              aria-label="Close"
+              onClick={(event) => {
+                event.preventDefault()
+                closeCreateDialog()
+              }}
+              edge="end"
+              size="small"
+              disabled={saving}
+            >
+              <CloseOutlinedIcon fontSize="small" />
+            </IconButton>
+          </DialogTitle>
           <DialogContent>{formFields(saving)}</DialogContent>
           <DialogActions>
-            <Button onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault()
+                closeCreateDialog()
+              }}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
             <Button type="submit" variant="contained" disabled={saving || projects.length === 0}>
               Create
             </Button>
@@ -834,9 +872,26 @@ export function LeadsPage() {
         </Box>
       </Dialog>
 
-      <Dialog open={Boolean(editLead)} onClose={() => setEditLead(null)} fullScreen={phone} fullWidth maxWidth="sm">
+      <Dialog open={Boolean(editLead)} onClose={closeEditDialog} fullScreen={phone} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={(event) => void onSaveEdit(event)}>
-          <DialogTitle>{editLead?.full_name ?? 'Lead'}</DialogTitle>
+          <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 1 }}>
+            <Box component="span" sx={{ flex: 1 }}>
+              {editLead?.full_name ?? 'Lead'}
+            </Box>
+            <IconButton
+              type="button"
+              aria-label="Close"
+              onClick={(event) => {
+                event.preventDefault()
+                closeEditDialog()
+              }}
+              edge="end"
+              size="small"
+              disabled={saving}
+            >
+              <CloseOutlinedIcon fontSize="small" />
+            </IconButton>
+          </DialogTitle>
           <DialogContent>
             {editLead ? (
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
@@ -848,14 +903,23 @@ export function LeadsPage() {
           </DialogContent>
           <DialogActions sx={{ justifyContent: 'space-between' }}>
             {canDelete ? (
-              <Button color="error" disabled={saving} onClick={() => void onDelete()}>
+              <Button type="button" color="error" disabled={saving} onClick={() => void onDelete()}>
                 Delete
               </Button>
             ) : (
               <span />
             )}
             <Stack direction="row" spacing={1}>
-              <Button onClick={() => setEditLead(null)}>Close</Button>
+              <Button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault()
+                  closeEditDialog()
+                }}
+                disabled={saving}
+              >
+                Close
+              </Button>
               {canUpdate ? (
                 <Button type="submit" variant="contained" disabled={saving}>
                   Save
