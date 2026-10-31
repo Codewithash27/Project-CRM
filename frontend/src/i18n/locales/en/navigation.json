@@ -15,6 +15,8 @@
   "placeholderLead": "This stays in the menu so the workspace is complete. The working screen will be built here, one at a time.",
   "homeGreeting": "Hello, {{name}}",
   "homeLead": "Open any area from the side menu. Screens that are not ready yet keep their place until they are built.",
+  "quickAccess": "Quick access",
+  "readyCount": "{{count}} ready",
   "sections": {
     "menu": "Menu"
   },
