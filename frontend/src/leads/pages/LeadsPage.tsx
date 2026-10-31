@@ -1,4 +1,6 @@
 import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined'
+import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined'
+import TodayOutlinedIcon from '@mui/icons-material/TodayOutlined'
 import {
   Alert,
   Box,
@@ -13,12 +15,8 @@ import {
   IconButton,
   MenuItem,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   TextField,
+  Tooltip,
   Typography,
   useMediaQuery,
 } from '@mui/material'
@@ -62,7 +60,13 @@ function ToneChip({
     <Chip
       size="small"
       label={label || '—'}
-      sx={{ bgcolor: bg ?? '#f1f5f9', color: color ?? '#475569', fontWeight: 600, height: 24 }}
+      sx={{
+        bgcolor: bg ?? '#f1f5f9',
+        color: color ?? '#475569',
+        fontWeight: 600,
+        height: 24,
+        borderRadius: '999px',
+      }}
     />
   )
 }
@@ -788,13 +792,14 @@ export function LeadsPage() {
         sx={{
           border: '1px solid',
           borderColor: 'divider',
-          borderRadius: 2,
+          borderRadius: '16px',
           bgcolor: 'background.paper',
-          overflow: 'auto',
+          overflow: 'hidden',
+          boxShadow: '0 1px 2px rgba(15,23,42,0.04)',
         }}
       >
         <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
-          <Typography fontWeight={600}>
+          <Typography fontWeight={700}>
             {total} lead{total === 1 ? '' : 's'}
           </Typography>
         </Box>
@@ -807,64 +812,138 @@ export function LeadsPage() {
                 : 'No leads match these filters.'}
           </Typography>
         ) : (
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Lead</TableCell>
-                <TableCell>Project</TableCell>
-                <TableCell>Mobile</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Priority</TableCell>
-                <TableCell>Follow-up</TableCell>
-                <TableCell>Source</TableCell>
-                {listFields.map((field) => (
-                  <TableCell key={field.id}>{field.label}</TableCell>
-                ))}
-                <TableCell align="right"> </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {items.map((lead) => (
-                <TableRow
+          <>
+            <Box
+              sx={{
+                display: { xs: 'none', md: 'grid' },
+                gridTemplateColumns: 'minmax(0,1.6fr) 104px 84px 100px 96px 44px',
+                columnGap: 1.25,
+                alignItems: 'center',
+                px: 2,
+                py: 1,
+                bgcolor: '#f8fafc',
+                borderBottom: '1px solid #dbe3ee',
+              }}
+            >
+              <Typography variant="caption" fontWeight={700} color="text.secondary">
+                Lead
+              </Typography>
+              <Typography variant="caption" fontWeight={700} color="text.secondary">
+                Status
+              </Typography>
+              <Typography variant="caption" fontWeight={700} color="text.secondary">
+                Priority
+              </Typography>
+              <Typography variant="caption" fontWeight={700} color="text.secondary">
+                Follow-up
+              </Typography>
+              <Typography variant="caption" fontWeight={700} color="text.secondary">
+                Source
+              </Typography>
+              <Typography variant="caption" fontWeight={700} color="text.secondary" textAlign="right">
+                {' '}
+              </Typography>
+            </Box>
+            {items.map((lead) => {
+              const clickable = canUpdate || isOwner
+              const statusTone = STATUS_TONE[lead.status] ?? { bg: '#f1f5f9', color: '#475569' }
+              return (
+                <Box
                   key={lead.id}
-                  hover
-                  sx={{ cursor: canUpdate || isOwner ? 'pointer' : 'default' }}
-                  onClick={() => void openEdit(lead)}
+                  onClick={() => {
+                    if (clickable) void openEdit(lead)
+                  }}
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: {
+                      xs: 'minmax(0,1fr) auto',
+                      md: 'minmax(0,1.6fr) 104px 84px 100px 96px 44px',
+                    },
+                    columnGap: 1.25,
+                    rowGap: 0.75,
+                    alignItems: 'center',
+                    px: 2,
+                    py: 1.15,
+                    borderBottom: '1px solid #edf1f7',
+                    cursor: clickable ? 'pointer' : 'default',
+                    '&:hover': { bgcolor: '#f8fbff' },
+                  }}
                 >
-                  <TableCell>
-                    <Typography fontWeight={600}>{lead.full_name}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {lead.lead_number}
-                      {lead.city ? ` · ${lead.city}` : ''}
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography fontWeight={700} noWrap>
+                      {lead.full_name}
                     </Typography>
-                  </TableCell>
-                  <TableCell>{lead.project_name || '—'}</TableCell>
-                  <TableCell>{lead.mobile}</TableCell>
-                  <TableCell>
-                    <ToneChip
-                      label={STATUS_LABEL[lead.status] ?? lead.status}
-                      {...(STATUS_TONE[lead.status] ?? { bg: '#f1f5f9', color: '#475569' })}
-                    />
-                  </TableCell>
-                  <TableCell>
+                    <Typography variant="caption" color="text.secondary" noWrap display="block">
+                      {lead.lead_number}
+                      {lead.project_name ? ` · ${lead.project_name}` : ''}
+                      {lead.city ? ` · ${lead.city}` : ''}
+                      {' · '}
+                      <Box component="span" sx={{ color: 'primary.main', fontWeight: 600 }}>
+                        {lead.mobile}
+                      </Box>
+                    </Typography>
+                    {listFields.length > 0 ? (
+                      <Typography variant="caption" color="text.secondary" noWrap display="block">
+                        {listFields
+                          .slice(0, 3)
+                          .map((field) => `${field.label}: ${formatExtraDisplay(lead.extra_values?.[field.key])}`)
+                          .join(' · ')}
+                      </Typography>
+                    ) : null}
+                  </Box>
+                  <Box sx={{ gridColumn: { xs: '1', md: 'auto' } }}>
+                    <ToneChip label={STATUS_LABEL[lead.status] ?? lead.status} {...statusTone} />
+                  </Box>
+                  <Box sx={{ gridColumn: { xs: '1', md: 'auto' } }}>
                     <ToneChip label={PRIORITY_LABEL[lead.priority]} {...PRIORITY_TONE[lead.priority]} />
-                  </TableCell>
-                  <TableCell>{formatDueLabel(lead.next_followup_at)}</TableCell>
-                  <TableCell>{lead.lead_source || '—'}</TableCell>
-                  {listFields.map((field) => (
-                    <TableCell key={field.id}>
-                      {formatExtraDisplay(lead.extra_values?.[field.key])}
-                    </TableCell>
-                  ))}
-                  <TableCell align="right" onClick={(event) => event.stopPropagation()}>
-                    <Button size="small" onClick={() => void openEdit(lead)}>
-                      Open
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  </Box>
+                  <Stack
+                    direction="row"
+                    spacing={0.5}
+                    sx={{
+                      alignItems: 'center',
+                      gridColumn: { xs: '1', md: 'auto' },
+                      fontSize: 13,
+                      color: 'text.secondary',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <TodayOutlinedIcon sx={{ fontSize: 15 }} />
+                    {formatDueLabel(lead.next_followup_at)}
+                  </Stack>
+                  <Typography
+                    variant="body2"
+                    noWrap
+                    sx={{ gridColumn: { xs: '1', md: 'auto' }, color: 'text.secondary' }}
+                  >
+                    {lead.lead_source || '—'}
+                  </Typography>
+                  <Stack
+                    direction="row"
+                    onClick={(event) => event.stopPropagation()}
+                    sx={{ justifyContent: 'flex-end', gridColumn: { xs: '2', md: 'auto' }, gridRow: { xs: '1', md: 'auto' } }}
+                  >
+                    <Tooltip title="Open">
+                      <IconButton
+                        size="small"
+                        aria-label={`Open ${lead.full_name}`}
+                        onClick={() => void openEdit(lead)}
+                        sx={{
+                          width: 30,
+                          height: 30,
+                          borderRadius: '8px',
+                          color: 'text.secondary',
+                          '&:hover': { bgcolor: '#eef2f7', color: 'text.primary' },
+                        }}
+                      >
+                        <OpenInNewOutlinedIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+                </Box>
+              )
+            })}
+          </>
         )}
       </Box>
 

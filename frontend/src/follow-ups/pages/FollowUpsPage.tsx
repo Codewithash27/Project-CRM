@@ -1,13 +1,17 @@
-import MoreVertIcon from '@mui/icons-material/MoreVert'
+import CheckIcon from '@mui/icons-material/Check'
+import PhoneInTalkOutlinedIcon from '@mui/icons-material/PhoneInTalkOutlined'
+import PhoneMissedOutlinedIcon from '@mui/icons-material/PhoneMissedOutlined'
+import SkipNextOutlinedIcon from '@mui/icons-material/SkipNextOutlined'
+import SnoozeOutlinedIcon from '@mui/icons-material/SnoozeOutlined'
+import TodayOutlinedIcon from '@mui/icons-material/TodayOutlined'
 import {
   Box,
-  Button,
   Chip,
   IconButton,
-  Menu,
   MenuItem,
   Stack,
   TextField,
+  Tooltip,
   Typography,
   useMediaQuery,
 } from '@mui/material'
@@ -17,6 +21,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ErrorAlert } from '../../components/common/ErrorAlert'
 import { LoadingScreen } from '../../components/common/LoadingScreen'
 import {
+  CUSTOM_STEP,
   FollowupPlanStep,
   gapForStep,
   loadFollowupPlan,
@@ -38,12 +43,33 @@ import { useAuth } from '../../store/auth-context'
 
 type SessionTally = { connected: number; noAnswer: number; snoozed: number; skipped: number }
 
+const STEP_PALETTE = ['#ec4899', '#8b5cf6', '#10b981', '#f59e0b', '#3b82f6', '#64748b', '#0ea5e9', '#f43f5e']
+
+const ROW_COLS = {
+  xs: 'minmax(0,1fr)',
+  md: 'minmax(0,1fr) 118px 84px 110px 148px',
+} as const
+
+const actionIconSx = {
+  width: 30,
+  height: 30,
+  borderRadius: '8px',
+  color: 'text.secondary',
+  '&:hover': { bgcolor: '#eef2f7', color: 'text.primary' },
+} as const
+
+function stepColor(label: string, plan: FollowupPlanStep[]) {
+  const index = plan.findIndex((step) => step.label === label)
+  if (label === CUSTOM_STEP) return STEP_PALETTE[5]
+  return STEP_PALETTE[index >= 0 ? index % STEP_PALETTE.length : 0]
+}
+
 function dueDisplay(lead: Lead) {
   const when = followWhen(lead.next_followup_at)
   const label = formatDueLabel(lead.next_followup_at)
-  if (!lead.next_followup_at) return { label: '—', overdue: false }
-  if (when === 'o') return { label: `${label} (overdue)`, overdue: true }
-  return { label, overdue: false }
+  if (!lead.next_followup_at) return { label: '—', overdue: false, when: null as ReturnType<typeof followWhen> }
+  if (when === 'o') return { label, overdue: true, when }
+  return { label, overdue: false, when }
 }
 
 export function FollowUpsPage() {
@@ -61,13 +87,17 @@ export function FollowUpsPage() {
   const [step, setStep] = useState('')
   const [saving, setSaving] = useState(false)
   const [tally, setTally] = useState<SessionTally>({ connected: 0, noAnswer: 0, snoozed: 0, skipped: 0 })
-  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null)
-  const [menuLead, setMenuLead] = useState<Lead | null>(null)
   const [plan, setPlan] = useState<FollowupPlanStep[]>(() => loadFollowupPlan(user?.company_id))
 
   useEffect(() => {
     setPlan(loadFollowupPlan(user?.company_id))
   }, [user?.company_id])
+
+  useEffect(() => {
+    if (!notice) return
+    const timer = window.setTimeout(() => setNotice(''), 1600)
+    return () => window.clearTimeout(timer)
+  }, [notice])
 
   useEffect(() => {
     void (async () => {
@@ -111,11 +141,6 @@ export function FollowUpsPage() {
     [tally],
   )
 
-  function closeMenu() {
-    setMenuAnchor(null)
-    setMenuLead(null)
-  }
-
   async function patchOutcome(
     lead: Lead,
     body: Record<string, unknown>,
@@ -129,7 +154,6 @@ export function FollowUpsPage() {
       await api.patch(`/api/v1/leads/${lead.id}`, body)
       setTally((current) => ({ ...current, [kind]: current[kind] + 1 }))
       setNotice(message)
-      closeMenu()
       await load()
     } catch (requestError) {
       setError(requestError instanceof ApiError ? requestError.message : 'Could not update follow-up.')
@@ -143,9 +167,7 @@ export function FollowUpsPage() {
     const next = nextPlanStep(plan, current)
     const target = next?.label ?? current
     const body: Record<string, unknown> = {
-      next_followup_at: next
-        ? addDaysIso(null, gapForStep(plan, current))
-        : null,
+      next_followup_at: next ? addDaysIso(null, gapForStep(plan, current)) : null,
       plan_step: target,
     }
     if (lead.status === 'new') body.status = 'contacted'
@@ -198,11 +220,7 @@ export function FollowUpsPage() {
         </Typography>
       ) : null}
 
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        spacing={1.5}
-        sx={{ alignItems: { sm: 'flex-start' } }}
-      >
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'flex-start' } }}>
         <TextField
           select
           size="small"
@@ -249,25 +267,30 @@ export function FollowUpsPage() {
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: '110px minmax(100px,1fr) minmax(120px,1.2fr) 90px 120px 90px 48px',
-              gap: 1,
+              gridTemplateColumns: ROW_COLS.md,
+              columnGap: 1.25,
+              alignItems: 'center',
               px: 2,
-              py: 1.25,
-              bgcolor: '#fafbfc',
-              borderBottom: '1px solid',
-              borderColor: 'divider',
-              typography: 'caption',
-              fontWeight: 700,
-              color: 'text.secondary',
+              py: 1,
+              bgcolor: '#f8fafc',
+              borderBottom: '1px solid #dbe3ee',
             }}
           >
-            <Box>Lead ID</Box>
-            <Box>Project</Box>
-            <Box>Name</Box>
-            <Box>Plan step</Box>
-            <Box>Due</Box>
-            <Box>Priority</Box>
-            <Box />
+            <Typography variant="caption" fontWeight={700} color="text.secondary">
+              Lead
+            </Typography>
+            <Typography variant="caption" fontWeight={700} color="text.secondary">
+              Plan
+            </Typography>
+            <Typography variant="caption" fontWeight={700} color="text.secondary">
+              Priority
+            </Typography>
+            <Typography variant="caption" fontWeight={700} color="text.secondary">
+              Due
+            </Typography>
+            <Typography variant="caption" fontWeight={700} color="text.secondary" textAlign="right">
+              Actions
+            </Typography>
           </Box>
         ) : null}
 
@@ -279,125 +302,159 @@ export function FollowUpsPage() {
           items.map((lead) => {
             const due = dueDisplay(lead)
             const priorityKey: LeadPriority = lead.priority in PRIORITY_TONE ? lead.priority : 'medium'
+            const planLabel = lead.plan_step || plan[0]?.label || 'Day 1'
+            const color = stepColor(planLabel, plan)
             return (
               <Box
                 key={lead.id}
                 sx={{
                   display: 'grid',
-                  gridTemplateColumns: {
-                    xs: '1fr auto',
-                    md: '110px minmax(100px,1fr) minmax(120px,1.2fr) 90px 120px 90px 48px',
-                  },
-                  gap: { xs: 1, md: 1 },
+                  gridTemplateColumns: ROW_COLS,
+                  columnGap: 1.25,
+                  rowGap: 0.75,
                   alignItems: 'center',
                   px: 2,
-                  py: 1.5,
-                  borderBottom: '1px solid',
-                  borderColor: 'divider',
-                  '&:hover': { bgcolor: '#f8fafc' },
+                  py: 1.15,
+                  borderBottom: '1px solid #edf1f7',
+                  '&:hover': { bgcolor: '#f8fbff' },
                 }}
               >
-                {phone ? (
-                  <Stack spacing={0.75} sx={{ minWidth: 0 }}>
-                    <Typography fontWeight={700} noWrap>
-                      {lead.full_name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" noWrap>
-                      {lead.lead_number}
-                      {lead.project_name ? ` · ${lead.project_name}` : ''} · {lead.plan_step || 'Day 1'}
-                    </Typography>
-                    <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
-                      <Typography
-                        variant="body2"
-                        fontWeight={due.overdue ? 700 : 500}
-                        color={due.overdue ? 'error.main' : 'text.primary'}
-                      >
-                        {due.label}
-                      </Typography>
-                      <Chip
-                        size="small"
-                        label={PRIORITY_LABEL[priorityKey]}
-                        sx={{ bgcolor: PRIORITY_TONE[priorityKey].bg, color: PRIORITY_TONE[priorityKey].color, fontWeight: 700 }}
-                      />
-                    </Stack>
-                    {canUpdate ? (
-                      <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
-                        <Button size="small" variant="contained" disabled={saving} onClick={() => void onConnected(lead)}>
-                          Connected
-                        </Button>
-                        <Button size="small" disabled={saving} onClick={() => void onNoAnswer(lead)}>
-                          No answer
-                        </Button>
-                        <Button size="small" disabled={saving} onClick={() => void onSnooze(lead)}>
-                          Snooze
-                        </Button>
-                        <Button size="small" disabled={saving} onClick={() => void onSkip(lead)}>
-                          Skip
-                        </Button>
-                      </Stack>
-                    ) : null}
-                  </Stack>
-                ) : (
-                  <>
-                    <Typography variant="body2" fontWeight={600} noWrap>
-                      {lead.lead_number}
-                    </Typography>
-                    <Typography variant="body2" noWrap>
-                      {lead.project_name || '—'}
-                    </Typography>
-                    <Typography fontWeight={700} noWrap>
-                      {lead.full_name}
-                    </Typography>
-                    <Chip size="small" label={lead.plan_step || 'Day 1'} sx={{ bgcolor: '#eff6ff', color: '#1d4ed8', fontWeight: 600 }} />
-                    <Typography
-                      variant="body2"
-                      fontWeight={due.overdue ? 700 : 500}
-                      color={due.overdue ? 'error.main' : 'text.primary'}
-                    >
-                      {due.label}
-                    </Typography>
-                    <Chip
-                      size="small"
-                      label={PRIORITY_LABEL[priorityKey]}
-                      sx={{ bgcolor: PRIORITY_TONE[priorityKey].bg, color: PRIORITY_TONE[priorityKey].color, fontWeight: 700 }}
-                    />
-                  </>
-                )}
-                {canUpdate && !phone ? (
-                  <IconButton
-                    size="small"
-                    disabled={saving}
-                    aria-label={`Actions for ${lead.full_name}`}
-                    onClick={(event) => {
-                      setMenuAnchor(event.currentTarget)
-                      setMenuLead(lead)
+                <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', minWidth: 0 }}>
+                  <Box
+                    sx={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: '50%',
+                      flexShrink: 0,
+                      display: 'grid',
+                      placeItems: 'center',
+                      bgcolor: `color-mix(in srgb, ${color} 14%, #fff)`,
+                      color,
                     }}
                   >
-                    <MoreVertIcon fontSize="small" />
-                  </IconButton>
-                ) : phone ? (
+                    <PhoneInTalkOutlinedIcon sx={{ fontSize: 20 }} />
+                  </Box>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography fontWeight={700} noWrap>
+                      {lead.full_name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" noWrap display="block">
+                      {lead.lead_number}
+                      {lead.project_name ? ` · ${lead.project_name}` : ''} ·{' '}
+                      <Box component="span" sx={{ color: 'primary.main', fontWeight: 600 }}>
+                        {lead.mobile}
+                      </Box>
+                    </Typography>
+                  </Box>
+                </Stack>
+
+                <Chip
+                  size="small"
+                  label={planLabel}
+                  sx={{
+                    justifySelf: 'start',
+                    bgcolor: `color-mix(in srgb, ${color} 12%, #fff)`,
+                    color,
+                    fontWeight: 600,
+                    borderRadius: '999px',
+                  }}
+                />
+                <Chip
+                  size="small"
+                  label={PRIORITY_LABEL[priorityKey]}
+                  sx={{
+                    justifySelf: 'start',
+                    bgcolor: PRIORITY_TONE[priorityKey].bg,
+                    color: PRIORITY_TONE[priorityKey].color,
+                    fontWeight: 600,
+                    borderRadius: '999px',
+                  }}
+                />
+                <Stack
+                  direction="row"
+                  spacing={0.5}
+                  sx={{
+                    alignItems: 'center',
+                    color: due.overdue ? '#b91c1c' : due.when === 't' ? '#b45309' : '#334155',
+                    fontWeight: due.overdue || due.when === 't' ? 600 : 500,
+                    fontSize: 13,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <TodayOutlinedIcon sx={{ fontSize: 15 }} />
+                  {due.label}
+                </Stack>
+
+                {canUpdate ? (
+                  <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'flex-end' }}>
+                    <Tooltip title="Connected">
+                      <span>
+                        <IconButton
+                          size="small"
+                          disabled={saving}
+                          aria-label={`Connected ${lead.full_name}`}
+                          onClick={() => void onConnected(lead)}
+                          sx={{
+                            width: 30,
+                            height: 30,
+                            borderRadius: '8px',
+                            bgcolor: 'primary.main',
+                            color: '#fff',
+                            '&:hover': { bgcolor: 'primary.dark' },
+                          }}
+                        >
+                          <CheckIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                    <Tooltip title="No answer">
+                      <span>
+                        <IconButton
+                          size="small"
+                          disabled={saving}
+                          aria-label={`No answer ${lead.full_name}`}
+                          onClick={() => void onNoAnswer(lead)}
+                          sx={actionIconSx}
+                        >
+                          <PhoneMissedOutlinedIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                    <Tooltip title="Snooze to tomorrow">
+                      <span>
+                        <IconButton
+                          size="small"
+                          disabled={saving}
+                          aria-label={`Snooze ${lead.full_name}`}
+                          onClick={() => void onSnooze(lead)}
+                          sx={actionIconSx}
+                        >
+                          <SnoozeOutlinedIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                    <Tooltip title="Skip">
+                      <span>
+                        <IconButton
+                          size="small"
+                          disabled={saving}
+                          aria-label={`Skip ${lead.full_name}`}
+                          onClick={() => void onSkip(lead)}
+                          sx={actionIconSx}
+                        >
+                          <SkipNextOutlinedIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </Stack>
+                ) : (
                   <span />
-                ) : null}
+                )}
               </Box>
             )
           })
         )}
       </Box>
-
-      <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={closeMenu}>
-        <MenuItem disabled={saving || !menuLead} onClick={() => menuLead && void onConnected(menuLead)}>
-          Connected
-        </MenuItem>
-        <MenuItem disabled={saving || !menuLead} onClick={() => menuLead && void onNoAnswer(menuLead)}>
-          No answer
-        </MenuItem>
-        <MenuItem disabled={saving || !menuLead} onClick={() => menuLead && void onSnooze(menuLead)}>
-          Snooze
-        </MenuItem>
-        <MenuItem disabled={saving || !menuLead} onClick={() => menuLead && void onSkip(menuLead)}>
-          Skip
-        </MenuItem>
-      </Menu>
     </Stack>
   )
 }

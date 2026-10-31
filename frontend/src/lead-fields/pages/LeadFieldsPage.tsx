@@ -1,3 +1,8 @@
+import AddOutlinedIcon from '@mui/icons-material/AddOutlined'
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward'
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward'
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import {
   Box,
   Button,
@@ -7,6 +12,7 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  IconButton,
   MenuItem,
   Stack,
   Table,
@@ -15,6 +21,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
   useMediaQuery,
 } from '@mui/material'
@@ -89,6 +96,12 @@ export function LeadFieldsPage() {
 
   const needsOptions = OPTION_TYPES.has(form.field_type)
   const typeLocked = Boolean(editing && editing.leads_with_data > 0)
+
+  useEffect(() => {
+    if (!notice) return
+    const timer = window.setTimeout(() => setNotice(''), 1600)
+    return () => window.clearTimeout(timer)
+  }, [notice])
 
   const loadProjects = useCallback(async () => {
     try {
@@ -263,105 +276,118 @@ export function LeadFieldsPage() {
   }
 
   return (
-    <Stack spacing={2.5}>
-      <Stack spacing={0.75}>
-        <Typography variant="h1">Lead Fields</Typography>
-        <Typography color="text.secondary" sx={{ maxWidth: 720, lineHeight: 1.55 }}>
-          Pick a project and add the extra fields its leads need. They appear in Create lead and the lead
-          panel, and in the lead table when &quot;In lead table&quot; is ticked.
+    <Stack spacing={1.25}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+        <Typography variant="h1" sx={{ flex: 1 }}>
+          Lead Fields
         </Typography>
+        <Tooltip title="Add field">
+          <span>
+            <IconButton
+              size="small"
+              color="primary"
+              aria-label="Add field"
+              disabled={!projectId || saving || projects.length === 0}
+              onClick={openAdd}
+              sx={{
+                bgcolor: 'primary.main',
+                color: '#fff',
+                width: 32,
+                height: 32,
+                borderRadius: '8px',
+                boxShadow: '0 4px 10px rgba(29,78,216,.2)',
+                '&:hover': { bgcolor: 'primary.dark' },
+                '&.Mui-disabled': { bgcolor: '#93c5fd', color: '#fff' },
+              }}
+            >
+              <AddOutlinedIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </span>
+        </Tooltip>
       </Stack>
 
       {error ? <ErrorAlert message={error} /> : null}
       {notice ? (
-        <Typography color="success.main" sx={{ fontWeight: 600 }}>
-          {notice}
-        </Typography>
+        <Box sx={{ bgcolor: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', borderRadius: '12px', px: 1.75, py: 1.25 }}>
+          <Typography variant="body2">{notice}</Typography>
+        </Box>
       ) : null}
 
       {projects.length === 0 ? (
-        <Box sx={{ p: 2.5, border: '1px solid', borderColor: 'divider', borderRadius: 3, bgcolor: 'background.paper' }}>
+        <Box sx={{ p: 2.5, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'background.paper' }}>
           <Typography>No project is available to you yet.</Typography>
         </Box>
       ) : (
         <>
-          <Box
-            sx={{
-              p: { xs: 2, sm: 2.5 },
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: 3,
-              bgcolor: 'background.paper',
-            }}
+          <TextField
+            select
+            size="small"
+            label="Project"
+            value={projectId}
+            onChange={(event) => void onProjectChange(event.target.value)}
+            sx={{ width: { xs: '100%', sm: 280 } }}
           >
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={2}
-              sx={{ alignItems: { sm: 'flex-end' } }}
-            >
-              <TextField
-                select
-                label="Project"
-                value={projectId}
-                fullWidth
-                sx={{ maxWidth: { sm: 320 } }}
-                onChange={(event) => void onProjectChange(event.target.value)}
-              >
-                {projects.map((project) => (
-                  <MenuItem key={project.id} value={project.id}>
-                    {project.name} ({project.code})
-                  </MenuItem>
-                ))}
-              </TextField>
-              <Box sx={{ flex: 1 }} />
-              <Button variant="contained" onClick={openAdd} disabled={!projectId || saving}>
-                + Add field
-              </Button>
-            </Stack>
-            <Typography color="text.secondary" sx={{ mt: 1.5, fontSize: '0.92rem', lineHeight: 1.5 }}>
-              <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>
-                Common fields
-              </Box>{' '}
-              (every project): {(data?.common_fields ?? []).join(', ') || 'Contact person, Mobile, Enquiry date, Location, Email, Requirement, Reference, Lead source, Priority, Follow-up, Status'}.
-            </Typography>
-          </Box>
+            {projects.map((project) => (
+              <MenuItem key={project.id} value={project.id}>
+                {project.name} ({project.code})
+              </MenuItem>
+            ))}
+          </TextField>
 
           {loading ? (
             <LoadingScreen />
           ) : !data?.items.length ? (
-            <Box sx={{ p: 2.5, border: '1px solid', borderColor: 'divider', borderRadius: 3, bgcolor: 'background.paper' }}>
-              <Typography>
-                No extra fields yet for {selectedName}. Click <b>+ Add field</b> to create the first one.
+            <Box sx={{ p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'background.paper' }}>
+              <Typography fontWeight={700}>No extra fields yet</Typography>
+              <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+                Use + to add the first field for {selectedName}.
               </Typography>
             </Box>
           ) : phone ? (
-            <Stack spacing={1.5}>
+            <Stack spacing={1.25}>
               {data.items.map((field, index) => (
                 <Box
                   key={field.id}
                   sx={{
-                    p: 2,
+                    p: 1.75,
                     border: '1px solid',
                     borderColor: 'divider',
-                    borderRadius: 3,
+                    borderRadius: '12px',
                     bgcolor: 'background.paper',
-                    opacity: field.is_active ? 1 : 0.7,
+                    opacity: field.is_active ? 1 : 0.65,
                   }}
                 >
                   <Stack spacing={1}>
                     <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography sx={{ fontWeight: 700 }}>
-                        {field.label}
-                        {!field.is_active ? ' · inactive' : ''}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {field.field_type_label}
-                      </Typography>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography fontWeight={700} noWrap>
+                          {field.label}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" noWrap display="block">
+                          {field.key} · {field.field_type_label}
+                        </Typography>
+                      </Box>
+                      <Stack direction="row" spacing={0.25}>
+                        <IconButton size="small" disabled={saving} onClick={() => openEdit(field)}>
+                          <EditOutlinedIcon sx={{ fontSize: 18 }} />
+                        </IconButton>
+                        <IconButton size="small" color="error" disabled={saving} onClick={() => void onDelete(field)}>
+                          <DeleteOutlineIcon sx={{ fontSize: 18 }} />
+                        </IconButton>
+                      </Stack>
                     </Stack>
-                    <Typography variant="body2" color="text.secondary">
-                      Key <code>{field.key}</code>
-                      {field.options?.length ? ` · ${field.options.join(', ')}` : ''}
-                    </Typography>
+                    <Stack direction="row" spacing={0.5}>
+                      <IconButton size="small" disabled={saving || index === 0} onClick={() => void moveField(field, -1)}>
+                        <ArrowUpwardIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        disabled={saving || index === data.items.length - 1}
+                        onClick={() => void moveField(field, 1)}
+                      >
+                        <ArrowDownwardIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                    </Stack>
                     <FormControlLabel
                       control={
                         <Checkbox
@@ -382,7 +408,7 @@ export function LeadFieldsPage() {
                           onChange={(event) => void toggleFlag(field, 'show_in_list', event.target.checked)}
                         />
                       }
-                      label="In lead table"
+                      label="In list"
                     />
                     <FormControlLabel
                       control={
@@ -395,82 +421,117 @@ export function LeadFieldsPage() {
                       }
                       label="Active"
                     />
-                    <Typography variant="body2" color="text.secondary">
-                      Leads with data: {field.leads_with_data}
-                    </Typography>
-                    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-                      <Button size="small" disabled={saving || index === 0} onClick={() => void moveField(field, -1)}>
-                        ↑
-                      </Button>
-                      <Button
-                        size="small"
-                        disabled={saving || index === data.items.length - 1}
-                        onClick={() => void moveField(field, 1)}
-                      >
-                        ↓
-                      </Button>
-                      <Button size="small" onClick={() => openEdit(field)} disabled={saving}>
-                        Edit
-                      </Button>
-                      <Button size="small" color="error" onClick={() => void onDelete(field)} disabled={saving}>
-                        Delete
-                      </Button>
-                    </Stack>
                   </Stack>
                 </Box>
               ))}
             </Stack>
           ) : (
-            <Box sx={{ overflowX: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 3 }}>
-              <Table size="small">
+            <Box
+              sx={{
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: '16px',
+                bgcolor: 'background.paper',
+                overflow: 'hidden',
+                boxShadow: '0 1px 2px rgba(15,23,42,0.04)',
+              }}
+            >
+              <Box sx={{ px: 2, py: 1.25, borderBottom: '1px solid #dbe3ee', bgcolor: '#f8fafc' }}>
+                <Typography fontWeight={700} sx={{ fontSize: 16 }}>
+                  Extra fields ({data.items.length})
+                </Typography>
+              </Box>
+              <Table
+                size="small"
+                sx={{
+                  width: '100%',
+                  tableLayout: 'fixed',
+                  '& th, & td': {
+                    borderBottomColor: '#edf1f7',
+                    py: 1.1,
+                    px: 1.5,
+                    verticalAlign: 'middle',
+                  },
+                  '& th': {
+                    fontWeight: 700,
+                    color: 'text.secondary',
+                    bgcolor: '#f8fafc',
+                    fontSize: 12,
+                  },
+                }}
+              >
                 <TableHead>
                   <TableRow>
-                    <TableCell>Order</TableCell>
-                    <TableCell>Field</TableCell>
-                    <TableCell>Key</TableCell>
-                    <TableCell>Type</TableCell>
-                    <TableCell>Options</TableCell>
-                    <TableCell>Required</TableCell>
-                    <TableCell>In lead table</TableCell>
-                    <TableCell>Active</TableCell>
-                    <TableCell>Leads with data</TableCell>
-                    <TableCell>Actions</TableCell>
+                    <TableCell sx={{ width: 88 }}>Order</TableCell>
+                    <TableCell sx={{ width: '32%' }}>Field</TableCell>
+                    <TableCell sx={{ width: '12%' }}>Type</TableCell>
+                    <TableCell align="center" sx={{ width: '12%' }}>
+                      Required
+                    </TableCell>
+                    <TableCell align="center" sx={{ width: '12%' }}>
+                      In list
+                    </TableCell>
+                    <TableCell align="center" sx={{ width: '12%' }}>
+                      Active
+                    </TableCell>
+                    <TableCell align="right" sx={{ width: 96 }}>
+                      Actions
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {data.items.map((field, index) => (
-                    <TableRow key={field.id} sx={{ opacity: field.is_active ? 1 : 0.65 }}>
+                    <TableRow
+                      key={field.id}
+                      hover
+                      sx={{ opacity: field.is_active ? 1 : 0.65, '&:last-child td': { borderBottom: 0 } }}
+                    >
                       <TableCell>
-                        <Stack direction="row" spacing={0.5}>
-                          <Button size="small" disabled={saving || index === 0} onClick={() => void moveField(field, -1)}>
-                            ↑
-                          </Button>
-                          <Button
-                            size="small"
-                            disabled={saving || index === data.items.length - 1}
-                            onClick={() => void moveField(field, 1)}
-                          >
-                            ↓
-                          </Button>
+                        <Stack direction="row" spacing={0}>
+                          <Tooltip title="Move up">
+                            <span>
+                              <IconButton
+                                size="small"
+                                disabled={saving || index === 0}
+                                aria-label={`Move ${field.label} up`}
+                                onClick={() => void moveField(field, -1)}
+                                sx={{ p: 0.5 }}
+                              >
+                                <ArrowUpwardIcon sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title="Move down">
+                            <span>
+                              <IconButton
+                                size="small"
+                                disabled={saving || index === data.items.length - 1}
+                                aria-label={`Move ${field.label} down`}
+                                onClick={() => void moveField(field, 1)}
+                                sx={{ p: 0.5 }}
+                              >
+                                <ArrowDownwardIcon sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
                         </Stack>
                       </TableCell>
-                      <TableCell>
-                        <Typography component="span" sx={{ fontWeight: 700 }}>
+                      <TableCell sx={{ overflow: 'hidden' }}>
+                        <Typography fontWeight={700} noWrap>
                           {field.label}
                         </Typography>
-                        {!field.is_active ? (
-                          <Typography component="span" variant="body2" color="text.secondary">
-                            {' '}
-                            inactive
-                          </Typography>
-                        ) : null}
+                        <Typography variant="caption" color="text.secondary" noWrap display="block">
+                          {field.key}
+                          {field.options?.length ? ` · ${field.options.join(', ')}` : ''}
+                          {field.leads_with_data ? ` · ${field.leads_with_data} leads` : ''}
+                        </Typography>
                       </TableCell>
                       <TableCell>
-                        <code>{field.key}</code>
+                        <Typography variant="body2" noWrap>
+                          {field.field_type_label}
+                        </Typography>
                       </TableCell>
-                      <TableCell>{field.field_type_label}</TableCell>
-                      <TableCell>{field.options?.length ? field.options.join(', ') : '—'}</TableCell>
-                      <TableCell>
+                      <TableCell align="center">
                         <Checkbox
                           size="small"
                           checked={field.is_required}
@@ -479,16 +540,16 @@ export function LeadFieldsPage() {
                           onChange={(event) => void toggleFlag(field, 'is_required', event.target.checked)}
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell align="center">
                         <Checkbox
                           size="small"
                           checked={field.show_in_list}
                           disabled={saving}
-                          inputProps={{ 'aria-label': `In lead table for ${field.label}` }}
+                          inputProps={{ 'aria-label': `In list for ${field.label}` }}
                           onChange={(event) => void toggleFlag(field, 'show_in_list', event.target.checked)}
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell align="center">
                         <Checkbox
                           size="small"
                           checked={field.is_active}
@@ -497,15 +558,35 @@ export function LeadFieldsPage() {
                           onChange={(event) => void toggleFlag(field, 'is_active', event.target.checked)}
                         />
                       </TableCell>
-                      <TableCell>{field.leads_with_data}</TableCell>
-                      <TableCell>
-                        <Stack direction="row" spacing={1}>
-                          <Button size="small" onClick={() => openEdit(field)} disabled={saving}>
-                            Edit
-                          </Button>
-                          <Button size="small" color="error" onClick={() => void onDelete(field)} disabled={saving}>
-                            Delete
-                          </Button>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'flex-end' }}>
+                          <Tooltip title="Edit">
+                            <span>
+                              <IconButton
+                                size="small"
+                                disabled={saving}
+                                aria-label={`Edit ${field.label}`}
+                                onClick={() => openEdit(field)}
+                                sx={{ p: 0.5 }}
+                              >
+                                <EditOutlinedIcon sx={{ fontSize: 18 }} />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title="Delete">
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                disabled={saving}
+                                aria-label={`Delete ${field.label}`}
+                                onClick={() => void onDelete(field)}
+                                sx={{ p: 0.5 }}
+                              >
+                                <DeleteOutlineIcon sx={{ fontSize: 18 }} />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
                         </Stack>
                       </TableCell>
                     </TableRow>

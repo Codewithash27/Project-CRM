@@ -1,4 +1,8 @@
 import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined'
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
+import ManageAccountsOutlinedIcon from '@mui/icons-material/ManageAccountsOutlined'
+import PersonOffOutlinedIcon from '@mui/icons-material/PersonOffOutlined'
+import PersonOutlineIcon from '@mui/icons-material/PersonOutline'
 import {
   Alert,
   Box,
@@ -17,6 +21,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
   useMediaQuery,
 } from '@mui/material'
@@ -340,16 +345,15 @@ export function UsersPage() {
 
       {filtered.length === 0 ? <Typography color="text.secondary">{t('access:noUsers')}</Typography> : null}
 
-      <Box sx={{ overflowX: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: '12px', bgcolor: '#fff' }}>
-        <Table size="small" sx={{ minWidth: 720 }}>
+      <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: '12px', bgcolor: '#fff', overflow: 'hidden' }}>
+        <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
           <TableHead>
             <TableRow sx={{ bgcolor: '#f8fafc' }}>
-              <TableCell sx={{ fontWeight: 600 }}>{t('access:name')}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('access:organisation')}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('access:role')}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('access:email')}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('access:status')}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }} align="right">
+              <TableCell sx={{ fontWeight: 700, width: '28%' }}>{t('access:name')}</TableCell>
+              <TableCell sx={{ fontWeight: 700, width: '18%' }}>{t('access:organisation')}</TableCell>
+              <TableCell sx={{ fontWeight: 700, width: '18%' }}>{t('access:role')}</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>{t('access:status')}</TableCell>
+              <TableCell sx={{ fontWeight: 700, width: 120 }} align="right">
                 {t('access:actions')}
               </TableCell>
             </TableRow>
@@ -360,10 +364,19 @@ export function UsersPage() {
               const primaryRole = account.roles[0] ?? ''
               return (
                 <TableRow key={account.id} hover sx={{ '&:last-child td': { borderBottom: 0 } }}>
-                  <TableCell>
-                    <Typography sx={{ fontWeight: 600 }}>{account.full_name}</Typography>
+                  <TableCell sx={{ maxWidth: 0 }}>
+                    <Typography fontWeight={700} noWrap>
+                      {account.full_name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" noWrap display="block">
+                      {account.email}
+                    </Typography>
                   </TableCell>
-                  <TableCell>{account.company_name ?? t('access:platform')}</TableCell>
+                  <TableCell sx={{ maxWidth: 0 }}>
+                    <Typography variant="body2" noWrap>
+                      {account.company_name ?? t('access:platform')}
+                    </Typography>
+                  </TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
                       {account.roles.map((item) => (
@@ -371,7 +384,6 @@ export function UsersPage() {
                       ))}
                     </Stack>
                   </TableCell>
-                  <TableCell sx={{ color: 'text.secondary' }}>{account.email}</TableCell>
                   <TableCell>
                     <Chip
                       size="small"
@@ -379,42 +391,59 @@ export function UsersPage() {
                       sx={{
                         bgcolor: account.is_active ? '#d1fae5' : '#f1f5f9',
                         color: account.is_active ? '#047857' : '#64748b',
-                        fontWeight: 500,
+                        fontWeight: 600,
+                        borderRadius: '999px',
                       }}
                     />
                   </TableCell>
                   <TableCell align="right">
-                    <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        disabled={isSelf || busyId === account.id}
-                        onClick={() => {
-                          setSelectedRole(primaryRole || 'SALESPERSON')
-                          setRoleTarget(account)
-                        }}
-                      >
-                        {t('access:changeRole')}
-                      </Button>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color={account.is_active ? 'error' : 'primary'}
-                        disabled={isSelf || busyId === account.id}
-                        onClick={() => setStatusTarget(account)}
-                      >
-                        {account.is_active ? t('access:deactivate') : t('access:activate')}
-                      </Button>
+                    <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'flex-end' }}>
+                      <Tooltip title={t('access:changeRole')}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            disabled={isSelf || busyId === account.id}
+                            aria-label={t('access:changeRole')}
+                            onClick={() => {
+                              setSelectedRole(primaryRole || 'SALESPERSON')
+                              setRoleTarget(account)
+                            }}
+                          >
+                            <ManageAccountsOutlinedIcon sx={{ fontSize: 18 }} />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title={account.is_active ? t('access:deactivate') : t('access:activate')}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            color={account.is_active ? 'error' : 'primary'}
+                            disabled={isSelf || busyId === account.id}
+                            aria-label={account.is_active ? t('access:deactivate') : t('access:activate')}
+                            onClick={() => setStatusTarget(account)}
+                          >
+                            {account.is_active ? (
+                              <PersonOffOutlinedIcon sx={{ fontSize: 18 }} />
+                            ) : (
+                              <PersonOutlineIcon sx={{ fontSize: 18 }} />
+                            )}
+                          </IconButton>
+                        </span>
+                      </Tooltip>
                       {canDelete ? (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="error"
-                          disabled={isSelf || busyId === account.id}
-                          onClick={() => setDeleteTarget(account)}
-                        >
-                          {t('access:deleteUser')}
-                        </Button>
+                        <Tooltip title={t('access:deleteUser')}>
+                          <span>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              disabled={isSelf || busyId === account.id}
+                              aria-label={t('access:deleteUser')}
+                              onClick={() => setDeleteTarget(account)}
+                            >
+                              <DeleteOutlineIcon sx={{ fontSize: 18 }} />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
                       ) : null}
                     </Stack>
                   </TableCell>
