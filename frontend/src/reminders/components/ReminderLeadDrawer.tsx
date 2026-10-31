@@ -24,6 +24,7 @@ import {
   gapForStep,
   nextPlanStep,
   stepIndex as planStepIndex,
+  waitDaysAfterStep,
 } from '../../followup-plan/plan'
 import {
   addDaysIso,
@@ -56,7 +57,7 @@ type DrawerForm = {
   extra_values: Record<string, string>
 }
 
-type ActionKind = 'connected' | 'noanswer' | 'reschedule' | 'skip' | 'custom' | 'note' | null
+type ActionKind = 'connected' | 'noanswer' | 'skip' | 'note' | null
 
 function currentPlanLabel(lead: Lead, plan: FollowupPlanStep[]) {
   const step = (lead.plan_step || '').trim()
@@ -102,6 +103,7 @@ type Props = {
   plan: FollowupPlanStep[]
   onClose: () => void
   onChanged: (message: string) => Promise<void>
+  onEditPlan?: () => void
 }
 
 function formatActivityAt(value: string) {
@@ -110,7 +112,7 @@ function formatActivityAt(value: string) {
   return date.toLocaleDateString('en-CA')
 }
 
-export function ReminderLeadDrawer({ lead, canUpdate, plan, onClose, onChanged }: Props) {
+export function ReminderLeadDrawer({ lead, canUpdate, plan, onClose, onChanged, onEditPlan }: Props) {
   const theme = useTheme()
   const phone = useMediaQuery(theme.breakpoints.down('md'))
   const open = Boolean(lead)
@@ -122,7 +124,7 @@ export function ReminderLeadDrawer({ lead, canUpdate, plan, onClose, onChanged }
   const [localError, setLocalError] = useState('')
   const [action, setAction] = useState<ActionKind>(null)
   const [actionNote, setActionNote] = useState('')
-  const [actionDate, setActionDate] = useState(() => isoToDateInput(addDaysIso(null, 1)))
+  const [customDueDate, setCustomDueDate] = useState(() => isoToDateInput(addDaysIso(null, 1)))
 
   const loadActivity = useCallback(async (leadId: string) => {
     try {
@@ -145,6 +147,7 @@ export function ReminderLeadDrawer({ lead, canUpdate, plan, onClose, onChanged }
     setForm(formFromLead(lead))
     setLocalError('')
     setAction(null)
+    setCustomDueDate(isoToDateInput(lead.next_followup_at) || isoToDateInput(addDaysIso(null, 1)))
     void loadActivity(lead.id)
     void (async () => {
       if (!lead.project_id) {
@@ -202,9 +205,10 @@ export function ReminderLeadDrawer({ lead, canUpdate, plan, onClose, onChanged }
         return
       }
       const next = nextPlanStep(plan, currentStep)
+      const waitDays = waitDaysAfterStep(plan, currentStep)
       const body: Record<string, unknown> = {
         plan_step: next?.label ?? currentStep,
-        next_followup_at: next ? addDaysIso(null, next.gapDays) : null,
+        next_followup_at: next ? addDaysIso(null, waitDays) : null,
         requirement: lead.requirement ? `${lead.requirement}\nCall: ${summary}` : `Call: ${summary}`,
       }
       if (lead.status === 'new') body.status = 'contacted'
@@ -221,16 +225,6 @@ export function ReminderLeadDrawer({ lead, canUpdate, plan, onClose, onChanged }
         },
         `No answer · ${lead.full_name}`,
       )
-      return
-    }
-
-    if (action === 'reschedule') {
-      const iso = dateInputToIsoNoon(actionDate)
-      if (!iso) {
-        setLocalError('Pick a valid due date.')
-        return
-      }
-      await patch({ next_followup_at: iso }, `Rescheduled · ${lead.full_name}`)
       return
     }
 
@@ -254,32 +248,10 @@ export function ReminderLeadDrawer({ lead, canUpdate, plan, onClose, onChanged }
       await patch(
         {
           plan_step: next.label,
-          next_followup_at: addDaysIso(null, next.gapDays),
+          next_followup_at: addDaysIso(null, waitDaysAfterStep(plan, currentStep)),
           requirement: lead.requirement ? `${lead.requirement}\nSkipped: ${why}` : `Skipped: ${why}`,
         },
         `Skipped · ${lead.full_name}`,
-      )
-      return
-    }
-
-    if (action === 'custom') {
-      const iso = dateInputToIsoNoon(actionDate)
-      const why = actionNote.trim()
-      if (!iso) {
-        setLocalError('Pick a valid due date.')
-        return
-      }
-      if (!why) {
-        setLocalError('Add a reason for the custom date.')
-        return
-      }
-      await patch(
-        {
-          plan_step: CUSTOM_STEP,
-          next_followup_at: iso,
-          requirement: lead.requirement ? `${lead.requirement}\nCustom: ${why}` : `Custom: ${why}`,
-        },
-        `Custom date · ${lead.full_name}`,
       )
       return
     }
@@ -305,12 +277,8 @@ export function ReminderLeadDrawer({ lead, canUpdate, plan, onClose, onChanged }
         return 'Mark connected'
       case 'noanswer':
         return 'No answer'
-      case 'reschedule':
-        return 'Reschedule'
       case 'skip':
         return 'Skip step'
-      case 'custom':
-        return 'Custom date'
       case 'note':
         return 'Add call summary'
       default:
@@ -536,9 +504,16 @@ export function ReminderLeadDrawer({ lead, canUpdate, plan, onClose, onChanged }
             </Box>
 
             <Box>
-              <Typography fontWeight={700} sx={{ mb: 1 }}>
-                Follow-up plan
-              </Typography>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
+                <Typography fontWeight={700} sx={{ flex: 1 }}>
+                  Follow-up plan
+                </Typography>
+                {onEditPlan ? (
+                  <Button size="small" onClick={onEditPlan}>
+                    Edit days
+                  </Button>
+                ) : null}
+              </Stack>
               <Stack direction="row" spacing={0.75} sx={{ overflowX: 'auto', pb: 0.5 }}>
                 {plan.map((step, index) => {
                   const done = currentIdx >= 0 && index < currentIdx
@@ -563,16 +538,52 @@ export function ReminderLeadDrawer({ lead, canUpdate, plan, onClose, onChanged }
                         {showCurrent
                           ? `Due ${isoToDateInput(lead.next_followup_at) || '—'}`
                           : done
-                            ? 'Connected'
-                            : `+${step.gapDays}d`}
+                            ? 'Done'
+                            : index < plan.length - 1
+                              ? `+${step.gapDays}d`
+                              : ''}
                       </Typography>
                     </Box>
                   )
                 })}
               </Stack>
-              {currentStep === CUSTOM_STEP ? (
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
-                  Custom follow-up · due {isoToDateInput(lead.next_followup_at) || '—'}
+
+              {canUpdate ? (
+                <Stack direction="row" spacing={1} sx={{ mt: 1.25, alignItems: 'center' }}>
+                  <TextField
+                    label="Custom date"
+                    type="date"
+                    size="small"
+                    value={customDueDate}
+                    InputLabelProps={{ shrink: true }}
+                    sx={{ flex: 1, maxWidth: 220 }}
+                    onChange={(event) => setCustomDueDate(event.target.value)}
+                  />
+                  <Button
+                    variant="outlined"
+                    disabled={saving || !customDueDate}
+                    onClick={() => {
+                      const iso = dateInputToIsoNoon(customDueDate)
+                      if (!iso) {
+                        setLocalError('Pick a valid date.')
+                        return
+                      }
+                      void patch(
+                        {
+                          plan_step: CUSTOM_STEP,
+                          next_followup_at: iso,
+                        },
+                        `Custom date set · ${lead.full_name}`,
+                      )
+                    }}
+                  >
+                    Set date
+                  </Button>
+                </Stack>
+              ) : null}
+              {currentStep === CUSTOM_STEP && lead.next_followup_at ? (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                  On custom date · due {isoToDateInput(lead.next_followup_at)}
                 </Typography>
               ) : null}
             </Box>
@@ -616,34 +627,12 @@ export function ReminderLeadDrawer({ lead, canUpdate, plan, onClose, onChanged }
                     <Button
                       disabled={saving}
                       onClick={() => {
-                        setAction('reschedule')
-                        setActionDate(isoToDateInput(addDaysIso(lead.next_followup_at, 1)))
-                        setActionNote('')
-                        setLocalError('')
-                      }}
-                    >
-                      Reschedule
-                    </Button>
-                    <Button
-                      disabled={saving}
-                      onClick={() => {
                         setAction('skip')
                         setActionNote('')
                         setLocalError('')
                       }}
                     >
                       Skip step
-                    </Button>
-                    <Button
-                      disabled={saving}
-                      onClick={() => {
-                        setAction('custom')
-                        setActionDate(isoToDateInput(addDaysIso(null, 1)))
-                        setActionNote('')
-                        setLocalError('')
-                      }}
-                    >
-                      Custom date
                     </Button>
                   </>
                 ) : null}
@@ -733,28 +722,12 @@ export function ReminderLeadDrawer({ lead, canUpdate, plan, onClose, onChanged }
             {lead ? ` · ${lead.full_name}` : ''}
           </DialogTitle>
           <DialogContent>
-            {action === 'reschedule' || action === 'custom' ? (
-              <TextField
-                label={action === 'custom' ? 'Due date' : 'New due date'}
-                type="date"
-                required
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-                value={actionDate}
-                sx={{ mt: 1 }}
-                onChange={(event) => setActionDate(event.target.value)}
-              />
-            ) : null}
-            {action === 'connected' ||
-            action === 'noanswer' ||
-            action === 'skip' ||
-            action === 'custom' ||
-            action === 'note' ? (
+            {action === 'connected' || action === 'noanswer' || action === 'skip' || action === 'note' ? (
               <TextField
                 label={
                   action === 'connected' || action === 'note'
                     ? 'Call summary'
-                    : action === 'skip' || action === 'custom'
+                    : action === 'skip'
                       ? 'Reason'
                       : 'One-line note'
                 }

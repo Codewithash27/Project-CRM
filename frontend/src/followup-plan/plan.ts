@@ -1,22 +1,26 @@
 export type FollowupPlanStep = {
+  /** Display name, e.g. "Day 3" */
   label: string
+  /** Days to wait AFTER completing this step before the next reminder */
   gapDays: number
 }
 
 export const CUSTOM_STEP = 'Custom'
 
+/** Defaults match the demo cadence: after Day 1 wait 2 days → Day 3, then 4 → Day 7, etc. */
 export const DEFAULT_FOLLOWUP_PLAN: FollowupPlanStep[] = [
-  { label: 'Day 1', gapDays: 1 },
-  { label: 'Day 3', gapDays: 2 },
-  { label: 'Day 7', gapDays: 4 },
-  { label: 'Day 21', gapDays: 14 },
-  { label: '3-month review', gapDays: 69 },
+  { label: 'Day 1', gapDays: 2 },
+  { label: 'Day 3', gapDays: 4 },
+  { label: 'Day 7', gapDays: 14 },
+  { label: 'Day 21', gapDays: 69 },
+  { label: '3-month review', gapDays: 90 },
 ]
 
 const STORAGE_PREFIX = 'aaditech.followupPlan.'
+const STORAGE_VERSION = 2
 
 function storageKey(companyId: string | null | undefined) {
-  return `${STORAGE_PREFIX}${companyId || 'local'}`
+  return `${STORAGE_PREFIX}v${STORAGE_VERSION}.${companyId || 'local'}`
 }
 
 export function loadFollowupPlan(companyId: string | null | undefined): FollowupPlanStep[] {
@@ -59,15 +63,23 @@ export function planLabels(steps: FollowupPlanStep[]) {
   return [...steps.map((step) => step.label), CUSTOM_STEP]
 }
 
+export function findPlanStep(steps: FollowupPlanStep[], label: string): FollowupPlanStep | null {
+  return steps.find((step) => step.label === label) ?? null
+}
+
 export function nextPlanStep(steps: FollowupPlanStep[], current: string): FollowupPlanStep | null {
-  const labels = steps.map((step) => step.label)
-  const index = labels.indexOf(current)
+  const index = steps.findIndex((step) => step.label === current)
   if (index < 0) return steps[0] ?? null
   return steps[index + 1] ?? null
 }
 
+/** Days to wait after finishing `current` before the next step is due. */
+export function waitDaysAfterStep(steps: FollowupPlanStep[], current: string) {
+  return findPlanStep(steps, current)?.gapDays ?? 7
+}
+
 export function gapForStep(steps: FollowupPlanStep[], label: string) {
-  return steps.find((step) => step.label === label)?.gapDays ?? 7
+  return waitDaysAfterStep(steps, label)
 }
 
 export function stepIndex(steps: FollowupPlanStep[], label: string) {

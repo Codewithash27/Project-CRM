@@ -143,7 +143,9 @@ export function FollowUpsPage() {
     const next = nextPlanStep(plan, current)
     const target = next?.label ?? current
     const body: Record<string, unknown> = {
-      next_followup_at: next ? addDaysIso(null, next.gapDays) : addDaysIso(null, gapForStep(plan, target)),
+      next_followup_at: next
+        ? addDaysIso(null, gapForStep(plan, current))
+        : null,
       plan_step: target,
     }
     if (lead.status === 'new') body.status = 'contacted'

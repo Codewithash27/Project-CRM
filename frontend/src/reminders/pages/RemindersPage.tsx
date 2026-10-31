@@ -2,7 +2,6 @@ import AddOutlinedIcon from '@mui/icons-material/AddOutlined'
 import CheckIcon from '@mui/icons-material/Check'
 import MoreVertIcon from '@mui/icons-material/MoreVert'
 import PhoneInTalkOutlinedIcon from '@mui/icons-material/PhoneInTalkOutlined'
-import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
 import TodayOutlinedIcon from '@mui/icons-material/TodayOutlined'
 import {
   Box,
@@ -124,6 +123,12 @@ export function RemindersPage() {
   useEffect(() => {
     setPlan(loadFollowupPlan(user?.company_id))
   }, [user?.company_id])
+
+  useEffect(() => {
+    if (!notice) return
+    const timer = window.setTimeout(() => setNotice(''), 1600)
+    return () => window.clearTimeout(timer)
+  }, [notice])
 
   const loadProjects = useCallback(async () => {
     const result = await api.get<{ items: LeadProjectOption[] }>('/api/v1/projects')
@@ -326,7 +331,7 @@ export function RemindersPage() {
       {
         status: 'contacted',
         requirement,
-        next_followup_at: addDaysIso(null, plan[1]?.gapDays ?? 3),
+        next_followup_at: addDaysIso(null, plan[0]?.gapDays ?? 2),
         plan_step: plan[1]?.label ?? plan[0]?.label ?? 'Day 1',
       },
       `Call done for ${callLead.full_name}.`,
@@ -386,22 +391,6 @@ export function RemindersPage() {
         <Typography variant="h1" sx={{ flex: 1 }}>
           Reminders
         </Typography>
-        <Tooltip title="Customize follow-up plan days">
-          <IconButton
-            size="small"
-            aria-label="Customize follow-up plan days"
-            onClick={() => setPlanOpen(true)}
-            sx={{
-              width: 32,
-              height: 32,
-              border: '1px solid #dbe3ee',
-              borderRadius: '8px',
-              bgcolor: '#fff',
-            }}
-          >
-            <SettingsOutlinedIcon sx={{ fontSize: 18 }} />
-          </IconButton>
-        </Tooltip>
         {canUpdate ? (
           <Tooltip title="Add reminder">
             <IconButton
@@ -929,6 +918,7 @@ export function RemindersPage() {
         plan={plan}
         onClose={() => setDrawerLeadId(null)}
         onChanged={onDrawerChanged}
+        onEditPlan={() => setPlanOpen(true)}
       />
 
       <FollowupPlanSettingsDialog
