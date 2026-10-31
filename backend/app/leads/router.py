@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.leads.schemas import (
     CreateLeadRequest,
     LeadListData,
+    LeadPlanStep,
     LeadPriority,
     LeadPublic,
     UpdateLeadRequest,
@@ -80,6 +81,8 @@ def get_leads(
     priority: LeadPriority | None = Query(default=None),
     next_followup_at: date | None = Query(default=None),
     project_id: uuid.UUID | None = Query(default=None),
+    plan_step: LeadPlanStep | None = Query(default=None),
+    exclude_lost: bool = Query(default=False),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> ApiResponse[LeadListData]:
@@ -94,6 +97,8 @@ def get_leads(
             priority=priority,
             next_followup_on=next_followup_at,
             project_id=project_id,
+            plan_step=plan_step,
+            exclude_lost=exclude_lost,
         ),
         limit=limit,
         offset=offset,

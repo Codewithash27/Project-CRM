@@ -19,6 +19,7 @@ from app.core.csrf import CSRFMiddleware
 from app.core.logging import configure_logging, log_event
 from app.core.security import dummy_password_hash
 from app.core.security_headers import SecurityHeadersMiddleware
+from app.kpis.router import router as kpis_router
 from app.lead_fields.router import router as lead_fields_router
 from app.leads.router import router as leads_router
 from app.permissions.router import router as permissions_router
@@ -131,6 +132,7 @@ def create_app() -> FastAPI:
     app.include_router(businesses_router, prefix="/api/v1/businesses", tags=["Businesses"])
     app.include_router(users_router, prefix="/api/v1/users", tags=["Users"])
     app.include_router(leads_router, prefix="/api/v1/leads", tags=["Leads"])
+    app.include_router(kpis_router, prefix="/api/v1/kpis", tags=["KPIs"])
     app.include_router(lead_fields_router, prefix="/api/v1/lead-fields", tags=["Lead Fields"])
     app.include_router(pipeline_router, prefix="/api/v1/pipeline-stages", tags=["Pipeline"])
     app.include_router(projects_router, prefix="/api/v1/projects", tags=["Projects"])

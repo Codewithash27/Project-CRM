@@ -17,7 +17,7 @@ from app.audit.service import record_audit
 from app.common.exceptions import AppError, ErrorCode
 from app.core.logging import log_event
 from app.lead_fields.service import normalize_extra_values
-from app.leads.models import Lead
+from app.leads.models import PLAN_STEPS, Lead
 from app.leads.schemas import CreateLeadRequest, UpdateLeadRequest, normalize_priority, normalize_status
 from app.pipeline.service import assert_stage_key, entry_stage_key
 
@@ -56,6 +56,8 @@ class LeadFilters:
     priority: str | None = None
     next_followup_on: date | None = None
     project_id: uuid.UUID | None = None
+    plan_step: str | None = None
+    exclude_lost: bool = False
 
 
 def _validation(field: str, code: str, message: str) -> AppError:
@@ -227,6 +229,10 @@ def list_leads(
         conditions.append(Lead.lead_source == filters.source.strip())
     if filters.project_id is not None:
         conditions.append(Lead.project_id == filters.project_id)
+    if filters.plan_step is not None and filters.plan_step in PLAN_STEPS:
+        conditions.append(Lead.plan_step == filters.plan_step)
+    if filters.exclude_lost:
+        conditions.append(Lead.status.notin_(("lost", "Lost", "unqualified")))
     # Salespeople only work leads on projects they are assigned to (plus their own unscoped legacy rows).
     if RoleName.SALESPERSON in {link.role.name for link in actor.user_roles} and RoleName.BUSINESS_OWNER not in {
         link.role.name for link in actor.user_roles
@@ -312,6 +318,7 @@ def create_lead(
         created_by_id=actor.id,
         status=status_key,
         priority=payload.priority,
+        plan_step=payload.plan_step if payload.plan_step in PLAN_STEPS else "Day 1",
         next_followup_at=payload.next_followup_at,
         extra_values=extras or None,
         is_deleted=False,
@@ -403,9 +410,17 @@ def update_lead(
             raise _validation("priority", "REQUIRED", "Priority is required.")
         lead.priority = payload.priority
         changed.append("priority")
+    if "plan_step" in fields:
+        if payload.plan_step is None or payload.plan_step not in PLAN_STEPS:
+            raise _validation(
+                "plan_step",
+                "INVALID",
+                "Plan step must be Day 1, Day 3, Day 7, Day 21, 3-month review, or Custom.",
+            )
+        lead.plan_step = payload.plan_step
+        changed.append("plan_step")
     if "next_followup_at" in fields:
-        if payload.next_followup_at is None:
-            raise _validation("next_followup_at", "REQUIRED", "Next follow-up is required.")
+        # Null clears the due date (Skip on Follow-ups).
         lead.next_followup_at = payload.next_followup_at
         changed.append("next_followup_at")
     if "project_id" in fields:

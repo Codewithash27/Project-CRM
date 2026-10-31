@@ -55,6 +55,14 @@ WARM = "Warm"
 COLD = "Cold"
 PRIORITIES = (LOW, MEDIUM, HIGH, HOT, WARM, COLD)
 
+PLAN_DAY_1 = "Day 1"
+PLAN_DAY_3 = "Day 3"
+PLAN_DAY_7 = "Day 7"
+PLAN_DAY_21 = "Day 21"
+PLAN_MONTH_3 = "3-month review"
+PLAN_CUSTOM = "Custom"
+PLAN_STEPS = (PLAN_DAY_1, PLAN_DAY_3, PLAN_DAY_7, PLAN_DAY_21, PLAN_MONTH_3, PLAN_CUSTOM)
+
 
 class Lead(Base):
     __tablename__ = "leads"
@@ -62,6 +70,10 @@ class Lead(Base):
         CheckConstraint(
             "priority IN ('low', 'medium', 'high', 'Hot', 'Warm', 'Cold')",
             name="ck_leads_priority",
+        ),
+        CheckConstraint(
+            "plan_step IN ('Day 1', 'Day 3', 'Day 7', 'Day 21', '3-month review', 'Custom')",
+            name="ck_leads_plan_step",
         ),
         CheckConstraint(
             "expected_value IS NULL OR expected_value >= 0",
@@ -124,6 +136,7 @@ class Lead(Base):
     status: Mapped[str] = mapped_column(String(30), nullable=False, server_default=text("'new'"))
     priority: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'medium'"))
     next_followup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    plan_step: Mapped[str] = mapped_column(String(40), nullable=False, server_default=text("'Day 1'"))
     extra_values: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(

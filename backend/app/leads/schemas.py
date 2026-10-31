@@ -8,10 +8,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.auth.schemas import normalize_email
-from app.leads.models import Lead
+from app.leads.models import PLAN_STEPS, Lead
 
 LeadStatus = str
 LeadPriority = Literal["low", "medium", "high"]
+LeadPlanStep = Literal["Day 1", "Day 3", "Day 7", "Day 21", "3-month review", "Custom"]
 
 # Demo seed rows used title-case labels; API always returns canonical values.
 _PRIORITY_PUBLIC = {
@@ -81,6 +82,7 @@ class CreateLeadRequest(BaseModel):
     project_id: uuid.UUID | None = None
     status: str | None = Field(default=None, max_length=40)
     priority: LeadPriority = "medium"
+    plan_step: LeadPlanStep = "Day 1"
     next_followup_at: datetime
     extra_values: dict[str, Any] | None = None
 
@@ -132,6 +134,7 @@ class UpdateLeadRequest(BaseModel):
     project_id: uuid.UUID | None = None
     status: str | None = Field(default=None, max_length=40)
     priority: LeadPriority | None = None
+    plan_step: LeadPlanStep | None = None
     next_followup_at: datetime | None = None
     extra_values: dict[str, Any] | None = None
 
@@ -188,6 +191,7 @@ class LeadPublic(BaseModel):
     created_by_id: str
     status: str
     priority: str
+    plan_step: str
     next_followup_at: datetime | None
     extra_values: dict[str, Any]
     is_deleted: bool
@@ -223,6 +227,7 @@ def to_lead_public(lead: Lead, project_name: str | None = None) -> LeadPublic:
         created_by_id=str(lead.created_by_id),
         status=normalize_status(lead.status),
         priority=normalize_priority(lead.priority),
+        plan_step=lead.plan_step if lead.plan_step in PLAN_STEPS else "Day 1",
         next_followup_at=lead.next_followup_at,
         extra_values=extras,
         is_deleted=lead.is_deleted,

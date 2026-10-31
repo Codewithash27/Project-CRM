@@ -4,8 +4,10 @@ import { GuestRoute, PermissionRoute, ProtectedRoute, RoleRoute } from '../../ac
 import { AccessDeniedPage } from '../../access/pages/AccessDeniedPage'
 import { HomePage } from '../../access/pages/HomePage'
 import { BusinessesPage } from '../../businesses/pages/BusinessesPage'
+import { FollowUpsPage } from '../../follow-ups/pages/FollowUpsPage'
 import { LeadFieldsPage } from '../../lead-fields/pages/LeadFieldsPage'
 import { LeadsPage } from '../../leads/pages/LeadsPage'
+import { KpisPage } from '../../kpis/pages/KpisPage'
 import { PipelinePage } from '../../pipeline/pages/PipelinePage'
 import { ProjectsPage } from '../../projects/pages/ProjectsPage'
 import { RemindersPage } from '../../reminders/pages/RemindersPage'
@@ -71,6 +73,8 @@ export function AppRoutes() {
         <Route path="lead-fields" element={<LeadFieldsPage />} />
         <Route path="pipeline" element={<PipelinePage />} />
         <Route path="reminders" element={<RemindersPage />} />
+        <Route path="follow-ups" element={<FollowUpsPage />} />
+        <Route path="kpis" element={<KpisPage />} />
         <Route
           path="users"
           element={
@@ -99,6 +103,8 @@ export function AppRoutes() {
             item.id !== 'leadFields' &&
             item.id !== 'pipeline' &&
             item.id !== 'reminders' &&
+            item.id !== 'followUps' &&
+            item.id !== 'kpis' &&
             item.id !== 'businesses',
         ).map((item) => (
           <Route key={item.id} path={item.path.replace('/app/', '')} element={<NavPlaceholder id={item.id} />} />
