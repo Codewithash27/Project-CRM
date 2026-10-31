@@ -2,7 +2,9 @@
 
 This repository contains the authentication and role-based access foundation for Aadi CRM, plus leads and projects.
 
-**New to this project?** Use the simple college guide: [SETUP_FOR_COLLEGE.md](simple setup.md) (Postgres install, DB design, seed logins, run steps).
+**Quick setup?** See [SETUP.md](SETUP.md) (requirements, backend/frontend install, run).
+
+**New to this project?** Longer college guide: [SETUP_FOR_COLLEGE.md](SETUP_FOR_COLLEGE.md) (Postgres install, DB design, seed logins, run steps).
 
 **Cursor / AI setup?** Paste the master prompt from [prompt.md](prompt.md) after unzipping the folder.
 
@@ -62,6 +64,37 @@ The app runs at `http://localhost:5173`. Open that host, not `127.0.0.1`, when `
 - Passwords are hashed with Argon2id.
 
 Authorization is permission-based. `SUPER_ADMIN`, `BUSINESS_OWNER`, `MARKETING`, and `SALESPERSON` are database roles. Super Admins receive the initial permission set. Business owners, marketing users, and salespeople receive only `features.read` until lead and tenant permissions are added. A user cannot change their own role or status.
+
+## Import leads (Excel)
+
+Upload an `.xlsx` file on **Leads** → the app maps column headers to common lead fields and that project’s **Lead Fields**, then creates leads. Repeated call-summary / follow-up columns merge into **Follow-up notes** when that field exists. Rows with a mobile that already exists in the company are skipped.
+
+### Before import
+
+1. Login as **Business Owner** or **Salesperson** (salesperson must be assigned to the project on Team).
+2. Open **Lead Fields** → select the project (e.g. Paneerwala) → create fields that match your Excel headers (Product, Quantity, Payment, Call time, Follow-up notes, etc.).
+3. Prepare Excel: first row = headers; every data row needs **Name** and **Phone**.
+
+### Import steps
+
+1. Open **Leads**.
+2. Click the **upload (import)** icon next to **+**.
+3. Choose the project → choose the `.xlsx` file → **Import**.
+4. A short success message appears; new leads show in the list (newest first). Re-importing the same phones skips those rows.
+
+## Salesperson feature status
+
+| Area | Status |
+|------|--------|
+| Login as `SALESPERSON` | Done |
+| See leads for assigned projects / own ownership | Done |
+| Create, edit, delete leads (with `leads.*` permissions) | Done |
+| Reminders / follow-ups on own leads | Done |
+| Import Excel leads for assigned projects | Done |
+| Use project Lead Fields on create/edit/import | Done (owner usually configures fields first) |
+| Full PRD sales suite (deals module, WhatsApp log, export, team dashboards) | Not complete yet |
+
+**Summary for demo:** Salesperson can work assigned projects, manage their leads, use reminders, and import Excel. Lead Fields must be set up on the project before a good import. Deals / full export from the older PRD are not done yet.
 
 ## Checks
 
