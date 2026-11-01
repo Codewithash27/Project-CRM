@@ -26,6 +26,8 @@ import { useTheme } from '@mui/material/styles'
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
+import { ColumnChooser } from '../../column-visibility/ColumnChooser'
+import { useColumnVisibility } from '../../column-visibility/useColumnVisibility'
 import { ErrorAlert } from '../../components/common/ErrorAlert'
 import { LoadingScreen } from '../../components/common/LoadingScreen'
 import type { LeadField, LeadFieldList } from '../../lead-fields/types'
@@ -139,6 +141,19 @@ export function LeadsPage() {
   const canDelete = Boolean(user?.permissions.includes('leads.delete'))
   const isOwner = Boolean(user?.roles.includes('BUSINESS_OWNER'))
   const isSales = Boolean(user?.roles.includes('SALESPERSON')) && !isOwner
+  const {
+    columns: columnDefs,
+    visibility: columnVisibility,
+    isVisible: isColumnVisible,
+    toggle: toggleColumn,
+    reset: resetColumns,
+    gridTemplateMd: leadsGridMd,
+    gridTemplateXs: leadsGridXs,
+    loadError: columnLoadError,
+    saveError: columnSaveError,
+    clearSaveError: clearColumnSaveError,
+    clearLoadError: clearColumnLoadError,
+  } = useColumnVisibility('leads')
 
   const [items, setItems] = useState<Lead[]>([])
   const [projects, setProjects] = useState<LeadProjectOption[]>([])
@@ -174,6 +189,20 @@ export function LeadsPage() {
     const timer = window.setTimeout(() => setNotice(''), 2200)
     return () => window.clearTimeout(timer)
   }, [notice])
+
+  useEffect(() => {
+    if (columnSaveError) {
+      setError("Couldn't save column preferences on this device. Layout kept; try again.")
+      clearColumnSaveError()
+    }
+  }, [columnSaveError, clearColumnSaveError])
+
+  useEffect(() => {
+    if (columnLoadError) {
+      setError('Column preferences could not be loaded. Showing all columns.')
+      clearColumnLoadError()
+    }
+  }, [columnLoadError, clearColumnLoadError])
 
   const activeFields = useMemo(
     () => projectFields.filter((field) => field.is_active),
@@ -800,6 +829,12 @@ export function LeadsPage() {
             </Tooltip>
           </Stack>
         ) : null}
+        <ColumnChooser
+          columns={columnDefs}
+          visibility={columnVisibility}
+          onToggle={toggleColumn}
+          onReset={resetColumns}
+        />
       </Stack>
 
       {isSales && projects.length === 0 ? (
@@ -899,7 +934,7 @@ export function LeadsPage() {
             <Box
               sx={{
                 display: { xs: 'none', md: 'grid' },
-                gridTemplateColumns: 'minmax(0,1.6fr) 104px 84px 100px 96px 44px',
+                gridTemplateColumns: leadsGridMd,
                 columnGap: 1.25,
                 alignItems: 'center',
                 px: 2,
@@ -911,18 +946,36 @@ export function LeadsPage() {
               <Typography variant="caption" fontWeight={700} color="text.secondary">
                 Lead
               </Typography>
-              <Typography variant="caption" fontWeight={700} color="text.secondary">
-                Status
-              </Typography>
-              <Typography variant="caption" fontWeight={700} color="text.secondary">
-                Priority
-              </Typography>
-              <Typography variant="caption" fontWeight={700} color="text.secondary">
-                Follow-up
-              </Typography>
-              <Typography variant="caption" fontWeight={700} color="text.secondary">
-                Source
-              </Typography>
+              {isColumnVisible('project') ? (
+                <Typography variant="caption" fontWeight={700} color="text.secondary">
+                  Project
+                </Typography>
+              ) : null}
+              {isColumnVisible('phone') ? (
+                <Typography variant="caption" fontWeight={700} color="text.secondary">
+                  Phone
+                </Typography>
+              ) : null}
+              {isColumnVisible('status') ? (
+                <Typography variant="caption" fontWeight={700} color="text.secondary">
+                  Status
+                </Typography>
+              ) : null}
+              {isColumnVisible('priority') ? (
+                <Typography variant="caption" fontWeight={700} color="text.secondary">
+                  Priority
+                </Typography>
+              ) : null}
+              {isColumnVisible('follow_up') ? (
+                <Typography variant="caption" fontWeight={700} color="text.secondary">
+                  Follow-up
+                </Typography>
+              ) : null}
+              {isColumnVisible('source') ? (
+                <Typography variant="caption" fontWeight={700} color="text.secondary">
+                  Source
+                </Typography>
+              ) : null}
               <Typography variant="caption" fontWeight={700} color="text.secondary" textAlign="right">
                 {' '}
               </Typography>
@@ -939,8 +992,8 @@ export function LeadsPage() {
                   sx={{
                     display: 'grid',
                     gridTemplateColumns: {
-                      xs: 'minmax(0,1fr) auto',
-                      md: 'minmax(0,1.6fr) 104px 84px 100px 96px 44px',
+                      xs: leadsGridXs,
+                      md: leadsGridMd,
                     },
                     columnGap: 1.25,
                     rowGap: 0.75,
@@ -958,12 +1011,7 @@ export function LeadsPage() {
                     </Typography>
                     <Typography variant="caption" color="text.secondary" noWrap display="block">
                       {lead.lead_number}
-                      {lead.project_name ? ` · ${lead.project_name}` : ''}
                       {lead.city ? ` · ${lead.city}` : ''}
-                      {' · '}
-                      <Box component="span" sx={{ color: 'primary.main', fontWeight: 600 }}>
-                        {lead.mobile}
-                      </Box>
                     </Typography>
                     {listFields.length > 0 ? (
                       <Typography variant="caption" color="text.secondary" noWrap display="block">
@@ -974,33 +1022,59 @@ export function LeadsPage() {
                       </Typography>
                     ) : null}
                   </Box>
-                  <Box sx={{ gridColumn: { xs: '1', md: 'auto' } }}>
-                    <ToneChip label={STATUS_LABEL[lead.status] ?? lead.status} {...statusTone} />
-                  </Box>
-                  <Box sx={{ gridColumn: { xs: '1', md: 'auto' } }}>
-                    <ToneChip label={PRIORITY_LABEL[lead.priority]} {...PRIORITY_TONE[lead.priority]} />
-                  </Box>
-                  <Stack
-                    direction="row"
-                    spacing={0.5}
-                    sx={{
-                      alignItems: 'center',
-                      gridColumn: { xs: '1', md: 'auto' },
-                      fontSize: 13,
-                      color: 'text.secondary',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TodayOutlinedIcon sx={{ fontSize: 15 }} />
-                    {formatDueLabel(lead.next_followup_at)}
-                  </Stack>
-                  <Typography
-                    variant="body2"
-                    noWrap
-                    sx={{ gridColumn: { xs: '1', md: 'auto' }, color: 'text.secondary' }}
-                  >
-                    {lead.lead_source || '—'}
-                  </Typography>
+                  {isColumnVisible('project') ? (
+                    <Typography
+                      variant="body2"
+                      noWrap
+                      sx={{ gridColumn: { xs: '1', md: 'auto' }, color: 'text.secondary' }}
+                    >
+                      {lead.project_name || '—'}
+                    </Typography>
+                  ) : null}
+                  {isColumnVisible('phone') ? (
+                    <Typography
+                      variant="body2"
+                      noWrap
+                      sx={{ gridColumn: { xs: '1', md: 'auto' }, color: 'primary.main', fontWeight: 600 }}
+                    >
+                      {lead.mobile || '—'}
+                    </Typography>
+                  ) : null}
+                  {isColumnVisible('status') ? (
+                    <Box sx={{ gridColumn: { xs: '1', md: 'auto' } }}>
+                      <ToneChip label={STATUS_LABEL[lead.status] ?? lead.status} {...statusTone} />
+                    </Box>
+                  ) : null}
+                  {isColumnVisible('priority') ? (
+                    <Box sx={{ gridColumn: { xs: '1', md: 'auto' } }}>
+                      <ToneChip label={PRIORITY_LABEL[lead.priority]} {...PRIORITY_TONE[lead.priority]} />
+                    </Box>
+                  ) : null}
+                  {isColumnVisible('follow_up') ? (
+                    <Stack
+                      direction="row"
+                      spacing={0.5}
+                      sx={{
+                        alignItems: 'center',
+                        gridColumn: { xs: '1', md: 'auto' },
+                        fontSize: 13,
+                        color: 'text.secondary',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <TodayOutlinedIcon sx={{ fontSize: 15 }} />
+                      {formatDueLabel(lead.next_followup_at)}
+                    </Stack>
+                  ) : null}
+                  {isColumnVisible('source') ? (
+                    <Typography
+                      variant="body2"
+                      noWrap
+                      sx={{ gridColumn: { xs: '1', md: 'auto' }, color: 'text.secondary' }}
+                    >
+                      {lead.lead_source || '—'}
+                    </Typography>
+                  ) : null}
                   <Stack
                     direction="row"
                     onClick={(event) => event.stopPropagation()}
