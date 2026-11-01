@@ -93,3 +93,4 @@ class MoveLeadsRequest(BaseModel):
 
 class MoveLeadsResult(BaseModel):
     moved: int
+    project_assigned: bool = False

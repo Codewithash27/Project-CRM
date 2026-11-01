@@ -463,6 +463,28 @@ def create_salesperson(
     return get_team_board(db, actor)
 
 
+def _ensure_project_member(
+    db: Session,
+    *,
+    project_id: uuid.UUID,
+    user_id: uuid.UUID,
+    assigned_by_id: uuid.UUID,
+) -> bool:
+    """Ensure user is on the project. Returns True when a new membership was created."""
+    existing = db.get(ProjectMember, (project_id, user_id))
+    if existing is not None:
+        return False
+    db.add(
+        ProjectMember(
+            project_id=project_id,
+            user_id=user_id,
+            assigned_by_id=assigned_by_id,
+            created_at=datetime.now(UTC),
+        )
+    )
+    return True
+
+
 def move_leads(
     db: Session,
     actor: User,
@@ -493,7 +515,16 @@ def move_leads(
         return user
 
     _require_salesperson(payload.from_user_id, "from_user_id")
-    _require_salesperson(payload.to_user_id, "to_user_id")
+    to_user = _require_salesperson(payload.to_user_id, "to_user_id")
+
+    # Salespeople only see leads on projects they are assigned to. Moving ownership
+    # without membership left Demo with "0 leads" even after a successful move.
+    project_assigned = _ensure_project_member(
+        db,
+        project_id=project.id,
+        user_id=to_user.id,
+        assigned_by_id=actor.id,
+    )
 
     leads = list(
         db.scalars(
@@ -519,9 +550,17 @@ def move_leads(
             "from_user_id": str(payload.from_user_id),
             "to_user_id": str(payload.to_user_id),
             "moved": len(leads),
+            "project_assigned": project_assigned,
         },
         ip_address=ip_address,
     )
     db.commit()
-    log_event(logger, "leads_moved", actor_id=str(actor.id), moved=len(leads), project_id=str(project.id))
-    return MoveLeadsResult(moved=len(leads))
+    log_event(
+        logger,
+        "leads_moved",
+        actor_id=str(actor.id),
+        moved=len(leads),
+        project_id=str(project.id),
+        project_assigned=project_assigned,
+    )
+    return MoveLeadsResult(moved=len(leads), project_assigned=project_assigned)

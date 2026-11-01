@@ -173,11 +173,19 @@ async def test_owner_assigns_salesperson_adds_rep_and_moves_leads(client):
         stored = db.get(Lead, uuid.UUID(lead_id))
         assert stored is not None
         assert stored.owner_id == mate_id
+        # Destination must be assigned to the project or they cannot list the moved lead.
+        assert db.get(ProjectMember, (uuid.UUID(project_id), mate_id)) is not None
         assert db.get(ProjectMember, (uuid.UUID(project_id), rep_id)) is not None
         assert db.get(Project, uuid.UUID(project_id)) is not None
         assert db.scalar(select(ProjectMember.user_id).where(ProjectMember.user_id == owner_id)) == owner_id
+        assert moved.json()["data"].get("project_assigned") is True
     finally:
         db.close()
+
+    assert (await login(client, email="mate@example.com")).status_code == 200
+    listed = await client.get("/api/v1/leads")
+    assert listed.status_code == 200
+    assert any(item["id"] == lead_id for item in listed.json()["data"]["items"])
 
 
 async def test_reassigning_project_moves_leads_to_new_salesperson(client):

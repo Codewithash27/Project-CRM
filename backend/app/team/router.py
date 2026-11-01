@@ -88,4 +88,7 @@ def post_move_leads(
     actor: User = Depends(get_current_user),
 ) -> ApiResponse[MoveLeadsResult]:
     result = move_leads(db, actor, payload, client_ip(request))
-    return ApiResponse(data=result, message=f"Moved {result.moved} lead(s).")
+    message = f"Moved {result.moved} lead(s)."
+    if result.project_assigned:
+        message += " Destination salesperson was also assigned to the project."
+    return ApiResponse(data=result, message=message)
