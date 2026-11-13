@@ -6,7 +6,8 @@ from datetime import UTC, datetime
 from app.access.scope import AccessScope, record_is_in_scope, resolve_access_scope, resolve_record_scope
 from app.core.database import SessionLocal
 from app.core.security import hash_password
-from app.organization.models import ACTIVE, Company, Team
+from app.leads.models import Lead
+from app.organization.models import ACTIVE, Company, Project, ProjectMember, Team
 from app.roles.models import UserRole
 from app.roles.service import get_role_by_name
 from app.users.models import User
@@ -182,6 +183,147 @@ async def test_admin_creates_user_without_returning_the_password(client):
     assert me.json()["data"]["manager_id"] == str(manager_id)
     assert me.json()["data"]["roles"] == ["SALESPERSON"]
     assert me.json()["data"]["is_active"] is True
+
+
+def _add_project(company_id: uuid.UUID, name: str, code: str) -> uuid.UUID:
+    db = SessionLocal()
+    try:
+        now = _now()
+        project = Project(
+            company_id=company_id,
+            name=name,
+            code=code,
+            template="GENERIC",
+            description="",
+            status=ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(project)
+        db.commit()
+        return project.id
+    finally:
+        db.close()
+
+
+async def test_admin_moves_a_user_and_can_clear_the_organisation(client):
+    north = _add_company("North Move")
+    south = _add_company("South Move")
+    team_id = _add_team(north, "North Desk")
+    manager_id = _add_member("move-manager@example.com", "SALESPERSON", company_id=north, team_id=team_id)
+    rep_id = _add_member(
+        "move-rep@example.com",
+        "SALESPERSON",
+        company_id=north,
+        team_id=team_id,
+        manager_id=manager_id,
+    )
+    report_id = _add_member("move-report@example.com", "SALESPERSON", company_id=north, manager_id=rep_id)
+    north_project = _add_project(north, "North Work", "NWORK")
+    south_project = _add_project(south, "South Work", "SWORK")
+    db = SessionLocal()
+    try:
+        now = _now()
+        db.add(ProjectMember(project_id=north_project, user_id=rep_id, assigned_by_id=manager_id, created_at=now))
+        db.add(ProjectMember(project_id=south_project, user_id=rep_id, assigned_by_id=manager_id, created_at=now))
+        db.add(
+            Lead(
+                company_id=north,
+                project_id=north_project,
+                lead_number="NWORK-0001",
+                full_name="Stays Put",
+                mobile="9000000201",
+                owner_id=rep_id,
+                created_by_id=manager_id,
+                status="new",
+                priority="medium",
+                plan_step="Day 1",
+                is_deleted=False,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    await _platform_admin(client)
+    moved = await client.patch(
+        f"/api/v1/users/{rep_id}",
+        json={"company_id": str(south)},
+        headers=await csrf_headers(client),
+    )
+    assert moved.status_code == 200, moved.text
+    body = moved.json()["data"]
+    assert body["company_id"] == str(south)
+    assert body["team_id"] is None
+    assert body["manager_id"] is None
+
+    db = SessionLocal()
+    try:
+        report = db.get(User, report_id)
+        assert report is not None
+        assert report.manager_id is None
+        lead = db.scalar(select(Lead).where(Lead.lead_number == "NWORK-0001"))
+        assert lead is not None
+        assert lead.company_id == north
+        assert lead.owner_id == rep_id
+        memberships = set(
+            db.scalars(select(ProjectMember.project_id).where(ProjectMember.user_id == rep_id)).all()
+        )
+        assert memberships == {south_project}
+    finally:
+        db.close()
+
+    cleared = await client.patch(
+        f"/api/v1/users/{rep_id}",
+        json={"company_id": None},
+        headers=await csrf_headers(client),
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["data"]["company_id"] is None
+    assert cleared.json()["data"]["company_name"] is None
+
+    db = SessionLocal()
+    try:
+        assert db.scalar(select(ProjectMember.project_id).where(ProjectMember.user_id == rep_id)) is None
+        lead = db.scalar(select(Lead).where(Lead.lead_number == "NWORK-0001"))
+        assert lead is not None
+        assert lead.company_id == north
+        assert lead.full_name == "Stays Put"
+    finally:
+        db.close()
+
+
+async def test_admin_edits_a_users_name_email_role_and_status(client):
+    company_id = _add_company("Edit Co")
+    user_id = _add_member("before-edit@example.com", "SALESPERSON", company_id=company_id)
+    await _platform_admin(client)
+    updated = await client.patch(
+        f"/api/v1/users/{user_id}",
+        json={
+            "full_name": "Edited Person",
+            "email": "after-edit@example.com",
+            "role": "MARKETING",
+            "company_id": str(company_id),
+            "is_active": False,
+        },
+        headers=await csrf_headers(client),
+    )
+    assert updated.status_code == 200, updated.text
+    body = updated.json()["data"]
+    assert body["full_name"] == "Edited Person"
+    assert body["email"] == "after-edit@example.com"
+    assert body["roles"] == ["MARKETING"]
+    assert body["company_id"] == str(company_id)
+    assert body["is_active"] is False
+
+    duplicate = await client.patch(
+        f"/api/v1/users/{user_id}",
+        json={"email": "root@example.com"},
+        headers=await csrf_headers(client),
+    )
+    assert duplicate.status_code == 409
 
 
 async def test_company_admin_cannot_manage_another_company(client):

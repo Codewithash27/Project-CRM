@@ -103,8 +103,12 @@ export function ProjectsPage() {
   const selectedCompany = data?.companies.find((company) => company.id === companyId)
   const duplicate = useMemo(
     () =>
-      !editing &&
-      Boolean(data?.items.some((project) => project.company_id === companyId && project.code === code)),
+      Boolean(
+        data?.items.some(
+          (project) =>
+            project.id !== editing?.id && project.company_id === companyId && project.code === code,
+        ),
+      ),
     [code, companyId, data?.items, editing],
   )
   const preview = codeIsValid(code) ? `${code}-0001` : 'Enter a short code'
@@ -146,6 +150,8 @@ export function ProjectsPage() {
     if (name.trim().length < 2) next.name = 'Project name must be at least 2 characters.'
     if (editing) {
       if (description.trim().length > 500) next.description = 'Description must be 500 characters or fewer.'
+      if (!companyId) next.company_id = 'Choose a business.'
+      else if (duplicate) next.company_id = 'This business already has a project with that short code.'
     } else {
       if (!codeIsValid(code)) next.code = 'Use 2 to 12 letters, numbers, or hyphens, starting with a letter.'
       else if (duplicate) next.code = 'This business already has a project with that short code.'
@@ -162,6 +168,7 @@ export function ProjectsPage() {
             name: name.trim(),
             description: description.trim(),
             status,
+            company_id: companyId,
           })
         : await api.post<ProjectList>('/api/v1/projects', {
             name: name.trim(),
@@ -335,7 +342,7 @@ export function ProjectsPage() {
             <Stack spacing={2} sx={{ pt: 0.5 }}>
               <Typography color="text.secondary">
                 {editing
-                  ? 'Rename the project, update the description, or mark it inactive. The short code stays the same because lead numbers already use it.'
+                  ? 'Rename the project, change its business, update the description, or mark it inactive. The short code stays the same because lead numbers already use it.'
                   : 'Pick the business first. Creating the project assigns it to that business owner automatically.'}
               </Typography>
               <TextField
@@ -402,8 +409,13 @@ export function ProjectsPage() {
                 required
                 fullWidth
                 error={Boolean(fieldErrors.company_id)}
-                helperText={fieldErrors.company_id || 'The Business Owner of this organisation will see the project.'}
-                disabled={saving || Boolean(editing) || !data || data.companies.length === 0}
+                helperText={
+                  fieldErrors.company_id ||
+                  (editing
+                    ? 'Leads on this project move with it. The short code must be free in the new business.'
+                    : 'The Business Owner of this organisation will see the project.')
+                }
+                disabled={saving || !data || data.companies.length === 0}
                 onChange={(event) => setCompanyId(event.target.value)}
               >
                 {(data?.companies ?? []).map((company) => (

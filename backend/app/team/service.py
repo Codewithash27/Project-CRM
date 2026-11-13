@@ -111,8 +111,13 @@ def _assign_owners_to_project(
     if owner_ids is not None:
         wanted = set(owner_ids)
         owners = [owner for owner in owners if owner.id in wanted]
+    existing = set(
+        db.scalars(select(ProjectMember.user_id).where(ProjectMember.project_id == project.id)).all()
+    )
     now = datetime.now(UTC)
     for owner in owners:
+        if owner.id in existing:
+            continue
         db.add(
             ProjectMember(
                 project_id=project.id,

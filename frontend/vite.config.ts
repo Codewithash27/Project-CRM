@@ -1,17 +1,19 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
 
+const apiProxy = process.env.CRM_API_PROXY || 'http://127.0.0.1:8000'
+
 export default defineConfig({
   plugins: [react()],
   server: {
     host: '127.0.0.1',
     port: 5173,
     strictPort: true,
-    // Same-origin /api avoids CSRF cookie failures when the tab is
-    // localhost:5173 but the API is 127.0.0.1:8000 (cross-site cookies).
+    // Same-origin /api avoids CSRF cookie failures when the page host
+    // and the API host are different sites.
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: apiProxy,
         changeOrigin: true,
       },
     },

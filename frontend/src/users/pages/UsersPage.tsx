@@ -1,5 +1,6 @@
 import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined'
 import DeleteForeverOutlinedIcon from '@mui/icons-material/DeleteForeverOutlined'
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import ManageAccountsOutlinedIcon from '@mui/icons-material/ManageAccountsOutlined'
 import PersonOffOutlinedIcon from '@mui/icons-material/PersonOffOutlined'
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline'
@@ -84,6 +85,11 @@ export function UsersPage() {
   const [role, setRole] = useState('SALESPERSON')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
+  const [editTarget, setEditTarget] = useState<AccessUser | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editEmail, setEditEmail] = useState('')
+  const [editCompany, setEditCompany] = useState('')
+  const [editRole, setEditRole] = useState('SALESPERSON')
   const [roleTarget, setRoleTarget] = useState<AccessUser | null>(null)
   const [selectedRole, setSelectedRole] = useState('SALESPERSON')
   const [statusTarget, setStatusTarget] = useState<AccessUser | null>(null)
@@ -151,6 +157,21 @@ export function UsersPage() {
     setFieldErrors({})
   }
 
+  function openEdit(account: AccessUser) {
+    setEditTarget(account)
+    setEditName(account.full_name)
+    setEditEmail(account.email)
+    setEditCompany(account.company_id ?? '')
+    setEditRole(account.roles[0] ?? 'SALESPERSON')
+    setFieldErrors({})
+  }
+
+  function closeEdit() {
+    if (saving) return
+    setEditTarget(null)
+    setFieldErrors({})
+  }
+
   function closeRoleDialog() {
     setRoleTarget(null)
   }
@@ -198,6 +219,37 @@ export function UsersPage() {
       setEmail('')
       setPassword('')
       setCreateOpen(false)
+      setFieldErrors({})
+      await load()
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.details.length > 0) {
+        setFieldErrors(fieldMessages(requestError, t, policy))
+      }
+      setError(messageForError(requestError, t))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function saveEdit(event: FormEvent) {
+    event.preventDefault()
+    if (!editTarget) return
+    const next: Record<string, string> = {}
+    if (editName.trim().length < 2) next.full_name = t('validation:fullNameMin')
+    if (!editRole) next.role = t('access:selectRole')
+    setFieldErrors(next)
+    if (Object.keys(next).length > 0) return
+    setSaving(true)
+    setNotice('')
+    setError('')
+    try {
+      await api.patch(`/api/v1/users/${editTarget.id}`, {
+        full_name: editName.trim(),
+        role: editRole,
+        company_id: editCompany || null,
+      })
+      setNotice(t('access:userUpdated'))
+      setEditTarget(null)
       setFieldErrors({})
       await load()
     } catch (requestError) {
@@ -359,7 +411,7 @@ export function UsersPage() {
               <TableCell sx={{ width: '18%' }}>{t('access:organisation')}</TableCell>
               <TableCell sx={{ width: '18%' }}>{t('access:role')}</TableCell>
               <TableCell>{t('access:status')}</TableCell>
-              <TableCell sx={{ width: 168, whiteSpace: 'nowrap' }} align="right">
+              <TableCell sx={{ width: 200, whiteSpace: 'nowrap' }} align="right">
                 {t('access:actions')}
               </TableCell>
             </TableRow>
@@ -404,6 +456,18 @@ export function UsersPage() {
                   </TableCell>
                   <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                     <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
+                      <Tooltip title={t('access:editUser')}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            disabled={isSelf || busyId === account.id}
+                            aria-label={t('access:editUser')}
+                            onClick={() => openEdit(account)}
+                          >
+                            <EditOutlinedIcon sx={{ fontSize: 18 }} />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
                       <Tooltip title={t('access:changeRole')}>
                         <span>
                           <IconButton
@@ -539,6 +603,91 @@ export function UsersPage() {
             </Button>
             <Button type="submit" variant="contained" disabled={saving} fullWidth={phone}>
               {saving ? t('auth:submitting') : t('access:createUser')}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+
+      <Dialog open={Boolean(editTarget)} onClose={closeEdit} fullScreen={phone} fullWidth maxWidth="sm" aria-labelledby="edit-user-title">
+        <Box component="form" onSubmit={(event) => void saveEdit(event)}>
+          <DialogTitle id="edit-user-title" sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 1 }}>
+            <Box component="span" sx={{ flex: 1 }}>
+              {t('access:editUser')}
+            </Box>
+            <IconButton
+              type="button"
+              aria-label={t('common:close')}
+              color="error"
+              onClick={closeEdit}
+              edge="end"
+              size="small"
+              disabled={saving}
+            >
+              <CloseOutlinedIcon fontSize="small" />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 0.5 }}>
+              <TextField
+                label={t('auth:fullName')}
+                value={editName}
+                required
+                fullWidth
+                autoFocus
+                error={Boolean(fieldErrors.full_name)}
+                helperText={fieldErrors.full_name}
+                disabled={saving}
+                onChange={(event) => setEditName(event.target.value)}
+              />
+              <TextField
+                label={t('auth:email')}
+                type="email"
+                value={editEmail}
+                fullWidth
+                disabled
+              />
+              <TextField
+                select
+                label={t('access:organisation')}
+                value={editCompany}
+                fullWidth
+                error={Boolean(fieldErrors.company_id)}
+                helperText={fieldErrors.company_id || t('access:organisationEditHint')}
+                disabled={saving}
+                onChange={(event) => setEditCompany(event.target.value)}
+              >
+                <MenuItem value="">{t('access:noneOrganisation')}</MenuItem>
+                {companies.map((company) => (
+                  <MenuItem key={company.id} value={company.id}>
+                    {company.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                label={t('access:selectRole')}
+                value={editRole}
+                required
+                fullWidth
+                error={Boolean(fieldErrors.role)}
+                helperText={fieldErrors.role}
+                disabled={saving}
+                onChange={(event) => setEditRole(event.target.value)}
+              >
+                {roles.map((item) => (
+                  <MenuItem key={item.id} value={item.name}>
+                    {roleLabel(item.name, t)}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2, flexDirection: { xs: 'column-reverse', sm: 'row' }, gap: 1 }}>
+            <Button type="button" onClick={closeEdit} disabled={saving} fullWidth={phone}>
+              {t('common:cancel')}
+            </Button>
+            <Button type="submit" variant="contained" disabled={saving} fullWidth={phone}>
+              {saving ? t('auth:submitting') : t('common:save')}
             </Button>
           </DialogActions>
         </Box>

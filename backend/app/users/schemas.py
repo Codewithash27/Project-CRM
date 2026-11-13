@@ -78,14 +78,42 @@ class CreateUserRequest(BaseModel):
 
 
 class UpdateManagedUserRequest(BaseModel):
-    """Fields the caller sent are tracked so null can clear team or manager."""
+    """Fields the caller sent are tracked so null can clear organisation, team, or manager."""
 
     model_config = ConfigDict(extra="forbid")
 
+    full_name: str | None = None
+    email: EmailStr | None = None
+    password: str | None = None
     role: str | None = None
+    company_id: uuid.UUID | None = None
     team_id: uuid.UUID | None = None
     manager_id: uuid.UUID | None = None
     is_active: bool | None = None
+
+    @field_validator("full_name")
+    @classmethod
+    def clean_full_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = " ".join(value.split())
+        if len(cleaned) < 2:
+            raise ValueError("Full name must be at least 2 characters.")
+        return cleaned
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def lowercase_email(cls, value: object) -> object:
+        if isinstance(value, str):
+            return normalize_email(value)
+        return value
+
+    @field_validator("password")
+    @classmethod
+    def blank_password(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        return value
 
 
 def role_names(user: User) -> list[str]:

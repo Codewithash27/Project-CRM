@@ -50,6 +50,7 @@ class UpdateProjectRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     description: str = Field(default="", max_length=500)
     status: Literal["active", "inactive"]
+    company_id: uuid.UUID | None = None
 
     @field_validator("name")
     @classmethod

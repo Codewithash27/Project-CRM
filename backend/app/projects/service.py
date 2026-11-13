@@ -3,7 +3,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -200,6 +200,61 @@ def create_project(
     return _to_public(project, company.name, 0)
 
 
+def _move_project_company(db: Session, project: Project, company_id: uuid.UUID, actor_id: uuid.UUID) -> Company:
+    """Point the project and its leads at another business. Memberships stay put."""
+
+    if company_id == project.company_id:
+        company = db.get(Company, project.company_id)
+        if company is None:
+            raise AppError(ErrorCode.NOT_FOUND, "Project not found.", 404)
+        return company
+    company = db.get(Company, company_id)
+    if company is None:
+        raise _validation("company_id", "UNKNOWN_COMPANY", "Choose a business.")
+    if company.status != ACTIVE:
+        raise _validation("company_id", "INACTIVE_COMPANY", "This business is not active.")
+    taken = db.scalar(
+        select(Project.id).where(
+            Project.company_id == company.id,
+            Project.code == project.code,
+            Project.id != project.id,
+        )
+    )
+    if taken is not None:
+        raise _validation(
+            "company_id",
+            "DUPLICATE_CODE",
+            "This business already has a project with that short code.",
+        )
+    numbers = list(db.scalars(select(Lead.lead_number).where(Lead.project_id == project.id)).all())
+    if numbers:
+        clash = db.scalar(
+            select(Lead.id).where(Lead.company_id == company.id, Lead.lead_number.in_(numbers))
+        )
+        if clash is not None:
+            raise _validation(
+                "company_id",
+                "DUPLICATE_LEAD_NUMBER",
+                "This business already has a lead with the same lead number. Nothing was changed.",
+            )
+    now = datetime.now(UTC)
+    project.company_id = company.id
+    db.execute(
+        update(Lead).where(Lead.project_id == project.id).values(company_id=company.id, updated_at=now)
+    )
+    ensure_project_owners(db, project, actor_id)
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise _validation(
+            "company_id",
+            "DUPLICATE_CODE",
+            "This business already has a project with that short code.",
+        ) from exc
+    return company
+
+
 def update_project(
     db: Session,
     actor: User,
@@ -212,10 +267,21 @@ def update_project(
     project = db.get(Project, project_id)
     if project is None:
         raise AppError(ErrorCode.NOT_FOUND, "Project not found.", 404)
-    company = db.get(Company, project.company_id)
-    if company is None:
-        raise AppError(ErrorCode.NOT_FOUND, "Project not found.", 404)
-    before = {"name": project.name, "description": project.description, "status": project.status}
+    previous_company_id = project.company_id
+    if "company_id" in payload.model_fields_set:
+        if payload.company_id is None:
+            raise _validation("company_id", "REQUIRED", "Choose a business.")
+        company = _move_project_company(db, project, payload.company_id, actor.id)
+    else:
+        company = db.get(Company, project.company_id)
+        if company is None:
+            raise AppError(ErrorCode.NOT_FOUND, "Project not found.", 404)
+    before = {
+        "name": project.name,
+        "description": project.description,
+        "status": project.status,
+        "company_id": str(previous_company_id),
+    }
     project.name = payload.name
     project.description = payload.description
     project.status = payload.status
@@ -229,7 +295,15 @@ def update_project(
         actor_id=actor.id,
         target_type="project",
         target_id=project.id,
-        context={"before": before, "after": {"name": project.name, "description": project.description, "status": project.status}},
+        context={
+            "before": before,
+            "after": {
+                "name": project.name,
+                "description": project.description,
+                "status": project.status,
+                "company_id": str(project.company_id),
+            },
+        },
         ip_address=ip_address,
     )
     db.commit()

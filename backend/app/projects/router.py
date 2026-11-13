@@ -70,7 +70,8 @@ def post_project(
     response_model=ApiResponse[ProjectListData],
     summary="Update a project",
     description=(
-        "A Super Admin renames a project, changes its description, or marks it active or inactive. "
+        "A Super Admin renames a project, changes its business, changes its description, "
+        "or marks it active or inactive. Leads on the project move with the business. "
         "The short code stays fixed because lead numbers already use it."
     ),
     responses=error_responses(401, 403, 404, 422),

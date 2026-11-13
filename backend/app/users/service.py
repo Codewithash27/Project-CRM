@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 
 from email_validator import EmailNotValidError, validate_email
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -16,7 +16,7 @@ from app.common.exceptions import AppError, ErrorCode
 from app.core.logging import log_event
 from app.core.password_policy import password_rule_failures
 from app.core.security import hash_password
-from app.organization.models import ACTIVE, Company, Team
+from app.organization.models import ACTIVE, Company, Project, ProjectMember, Team
 from app.permissions.service import get_permission_keys
 from app.roles.models import Role, UserRole
 from app.roles.service import RoleName, get_role_by_name
@@ -417,6 +417,51 @@ def create_managed_user(
     return user
 
 
+def _apply_company_change(
+    db: Session,
+    target: User,
+    company_id: uuid.UUID | None,
+    fields: set[str],
+    changed: dict[str, object],
+) -> uuid.UUID | None:
+    """Move a user to another business, or to no business. Leads stay where they are."""
+
+    if company_id is not None:
+        _load_company(db, company_id)
+    target.company_id = company_id
+    changed["company_id"] = None if company_id is None else str(company_id)
+    if "team_id" not in fields:
+        target.team_id = None
+        changed["team_id"] = None
+    if "manager_id" not in fields:
+        target.manager_id = None
+        changed["manager_id"] = None
+    report_filter = [User.manager_id == target.id, User.id != target.id]
+    if company_id is None:
+        db.execute(update(User).where(*report_filter).values(manager_id=None))
+    else:
+        db.execute(
+            update(User)
+            .where(*report_filter, or_(User.company_id.is_(None), User.company_id != company_id))
+            .values(manager_id=None)
+        )
+    team_clear = update(Team).where(Team.manager_id == target.id)
+    if company_id is not None:
+        team_clear = team_clear.where(Team.company_id != company_id)
+    db.execute(team_clear.values(manager_id=None))
+    if company_id is None:
+        db.execute(delete(ProjectMember).where(ProjectMember.user_id == target.id))
+    else:
+        stale_projects = select(Project.id).where(Project.company_id != company_id)
+        db.execute(
+            delete(ProjectMember).where(
+                ProjectMember.user_id == target.id,
+                ProjectMember.project_id.in_(stale_projects),
+            )
+        )
+    return company_id
+
+
 def update_managed_user(
     db: Session,
     *,
@@ -428,6 +473,10 @@ def update_managed_user(
     fields = payload.model_fields_set
     if not fields:
         raise _validation("request", "REQUIRED", "Provide at least one field to update.")
+    if "full_name" in fields and not payload.full_name:
+        raise _validation("full_name", "REQUIRED", "Full name is required.")
+    if "email" in fields and not payload.email:
+        raise _validation("email", "REQUIRED", "Email is required.")
     if "role" in fields and not payload.role:
         raise _validation("role", "REQUIRED", "Role is required.")
     if "is_active" in fields and payload.is_active is None:
@@ -455,6 +504,34 @@ def update_managed_user(
     now = datetime.now(UTC)
     company_id = target.company_id
     changed: dict[str, object] = {}
+    if "full_name" in fields and payload.full_name and payload.full_name != target.full_name:
+        target.full_name = payload.full_name
+        changed["full_name"] = payload.full_name
+    if "email" in fields and payload.email and payload.email != target.email:
+        taken = db.scalar(select(User.id).where(User.email == payload.email, User.id != target.id))
+        if taken is not None:
+            raise AppError(ErrorCode.EMAIL_ALREADY_EXISTS, "An account with this email already exists.", 409)
+        target.email = payload.email
+        changed["email"] = payload.email
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            raise AppError(
+                ErrorCode.EMAIL_ALREADY_EXISTS,
+                "An account with this email already exists.",
+                409,
+            ) from None
+    if "password" in fields and payload.password:
+        _password_error(payload.password)
+        target.password_hash = hash_password(payload.password)
+        target.session_version += 1
+        revoke_all_refresh_tokens(db, target.id, now)
+        changed["password"] = True
+    if "company_id" in fields and payload.company_id != target.company_id:
+        if not is_platform_admin(actor):
+            raise AppError(ErrorCode.FORBIDDEN, "You do not have permission to perform this action.", 403)
+        company_id = _apply_company_change(db, target, payload.company_id, fields, changed)
     if "team_id" in fields:
         if payload.team_id is None:
             target.team_id = None
