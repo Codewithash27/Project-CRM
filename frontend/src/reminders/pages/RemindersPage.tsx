@@ -99,7 +99,6 @@ export function RemindersPage() {
   const phone = useMediaQuery(theme.breakpoints.down('md'))
   const { user } = useAuth()
   const canUpdate = Boolean(user?.permissions.includes('leads.update'))
-  const canDelete = Boolean(user?.permissions.includes('leads.delete'))
   const canCreate = Boolean(user?.permissions.includes('leads.create'))
   const {
     columns: columnDefs,
@@ -841,13 +840,11 @@ export function RemindersPage() {
                           </IconButton>
                         </span>
                       </Tooltip>
-                      {canDelete ? (
-                        <DeleteIconButton
-                          onClick={() => setDeleteTarget(lead)}
-                          disabled={saving}
-                          tooltip={`Delete ${lead.full_name}`}
-                        />
-                      ) : null}
+                      <DeleteIconButton
+                        onClick={() => setDeleteTarget(lead)}
+                        disabled={saving}
+                        tooltip={`Remove reminder for ${lead.full_name}`}
+                      />
                     </Stack>
                   ) : null}
                 </Box>
@@ -1005,7 +1002,6 @@ export function RemindersPage() {
       <ReminderLeadDrawer
         lead={drawerLead}
         canUpdate={canUpdate}
-        canDelete={canDelete}
         plan={plan}
         onClose={() => setDrawerLeadId(null)}
         onChanged={onDrawerChanged}
@@ -1014,24 +1010,27 @@ export function RemindersPage() {
 
       <ConfirmDialog
         open={Boolean(deleteTarget)}
-        title={`Delete ${deleteTarget?.full_name}?`}
-        description="Remove this lead from the project?"
-        confirmLabel="Delete lead"
+        title="Remove this reminder?"
+        description={
+          deleteTarget
+            ? `Clear the reminder for ${deleteTarget.full_name}? The lead stays in the project.`
+            : 'Clear this reminder? The lead stays in the project.'
+        }
+        confirmLabel="Remove reminder"
         loading={deleting}
         onCancel={() => setDeleteTarget(null)}
         onConfirm={async () => {
           if (!deleteTarget) return
-          const deletedId = deleteTarget.id
-          const deletedName = deleteTarget.full_name
+          const reminderId = deleteTarget.id
+          const reminderName = deleteTarget.full_name
           setDeleting(true)
           try {
-            await api.delete(`/api/v1/leads/${deletedId}`)
-            if (drawerLeadId === deletedId) setDrawerLeadId(null)
+            await api.patch(`/api/v1/leads/${reminderId}`, { next_followup_at: null })
             setDeleteTarget(null)
-            setNotice(`Lead deleted · ${deletedName}`)
+            setNotice(`Reminder removed · ${reminderName}`)
             await load()
           } catch (err) {
-            setError(err instanceof ApiError ? err.message : 'Could not delete lead.')
+            setError(err instanceof ApiError ? err.message : 'Could not remove reminder.')
           } finally {
             setDeleting(false)
           }
