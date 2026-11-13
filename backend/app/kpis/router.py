@@ -1,4 +1,4 @@
-"""KPI HTTP routes."""
+"""KPI HTTP routes for the role dashboard."""
 
 import uuid
 from datetime import date

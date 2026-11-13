@@ -1,3 +1,4 @@
+/** Role dashboard: own pipeline for sales, team view for managers. */
 import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined'
 import PhoneOutlinedIcon from '@mui/icons-material/PhoneOutlined'
 import PhoneDisabledOutlinedIcon from '@mui/icons-material/PhoneDisabledOutlined'

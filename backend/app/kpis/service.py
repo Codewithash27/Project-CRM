@@ -1,4 +1,7 @@
-"""Role dashboards built from leads, calls, and project membership."""
+"""Role dashboards built from leads, calls, and project membership.
+
+Sales users see their own pipeline. Managers see the team dashboard.
+"""
 
 from __future__ import annotations
 
