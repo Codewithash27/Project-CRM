@@ -72,7 +72,7 @@ type ReminderView = 'reminders' | 'new'
 
 const VIEW_OPTIONS: { value: ReminderView; label: string }[] = [
   { value: 'reminders', label: 'Reminder' },
-  { value: 'new', label: 'No reminder' },
+  { value: 'new', label: 'New lead' },
 ]
 type SortBy = 'time' | 'pri' | 'name'
 
