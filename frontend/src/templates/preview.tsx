@@ -71,8 +71,6 @@ export function TemplatePreview({
   title,
   message,
   imageUrl,
-  senderName,
-  senderMobile,
   color,
   actions,
   compact = false,
@@ -80,8 +78,6 @@ export function TemplatePreview({
   title: string
   message: string
   imageUrl: string
-  senderName: string
-  senderMobile: string | null
   color: string
   actions?: ReactNode
   compact?: boolean
@@ -152,14 +148,6 @@ export function TemplatePreview({
         >
           {message.trim() || 'Your message will show here.'}
         </Typography>
-        <Box sx={{ borderTop: '1px solid #e6e8ec', pt: 1.1 }}>
-          <Typography fontWeight={700} sx={{ color, lineHeight: 1.3 }}>
-            {senderName.trim() || 'Your name'}
-          </Typography>
-          <Typography variant="body2" sx={{ color: '#475569' }}>
-            {senderMobile || 'Mobile number'}
-          </Typography>
-        </Box>
       </Box>
     </Box>
   )

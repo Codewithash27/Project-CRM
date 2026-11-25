@@ -39,16 +39,12 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 function TemplateCard({
   item,
-  senderName,
-  senderMobile,
   disabled,
   onView,
   onEdit,
   onDelete,
 }: {
   item: TemplateItem
-  senderName: string
-  senderMobile: string | null
   disabled: boolean
   onView: () => void
   onEdit: () => void
@@ -60,8 +56,6 @@ function TemplateCard({
       title={item.title}
       message={item.message}
       imageUrl={imageUrl}
-      senderName={senderName}
-      senderMobile={senderMobile}
       color={item.color || DEFAULT_TEMPLATE_COLOR}
       compact
       actions={
@@ -89,13 +83,9 @@ function TemplateCard({
 
 function TemplateViewDialog({
   item,
-  senderName,
-  senderMobile,
   onClose,
 }: {
   item: TemplateItem | null
-  senderName: string
-  senderMobile: string | null
   onClose: () => void
 }) {
   const imageUrl = useTemplateImage(item?.has_image ? item.id : null)
@@ -107,8 +97,6 @@ function TemplateViewDialog({
             title={item.title}
             message={item.message}
             imageUrl={imageUrl}
-            senderName={senderName}
-            senderMobile={senderMobile}
             color={item.color || DEFAULT_TEMPLATE_COLOR}
           />
         ) : null}
@@ -311,8 +299,6 @@ export function TemplatesPage() {
             <TemplateCard
               key={item.id}
               item={item}
-              senderName={user?.full_name ?? ''}
-              senderMobile={user?.mobile ?? null}
               disabled={saving}
               onView={() => setViewing(item)}
               onEdit={() => openEdit(item)}
@@ -411,8 +397,6 @@ export function TemplatesPage() {
                   title={title}
                   message={message}
                   imageUrl={previewImage}
-                  senderName={user?.full_name ?? ''}
-                  senderMobile={user?.mobile ?? null}
                   color={color}
                 />
               </Box>
@@ -429,12 +413,7 @@ export function TemplatesPage() {
         </Box>
       </Dialog>
 
-      <TemplateViewDialog
-        item={viewing}
-        senderName={user?.full_name ?? ''}
-        senderMobile={user?.mobile ?? null}
-        onClose={() => setViewing(null)}
-      />
+      <TemplateViewDialog item={viewing} onClose={() => setViewing(null)} />
 
       <ConfirmDialog
         open={Boolean(deleteTarget)}

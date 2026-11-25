@@ -1,5 +1,8 @@
+import CheckRoundedIcon from '@mui/icons-material/CheckRounded'
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded'
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined'
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined'
+import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined'
 import {
   Box,
   Button,
@@ -7,9 +10,8 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  MenuItem,
+  IconButton,
   Stack,
-  TextField,
   Typography,
   useMediaQuery,
 } from '@mui/material'
@@ -20,7 +22,7 @@ import { ApiError } from '../../services/api/errors'
 import { api, apiBlob } from '../../services/api/client'
 import { useAuth } from '../../store/auth-context'
 import { renderWhatsAppMessage } from '../../templates/message'
-import { DEFAULT_TEMPLATE_COLOR, TemplatePreview } from '../../templates/preview'
+import { DEFAULT_TEMPLATE_COLOR, useTemplateImage } from '../../templates/preview'
 
 interface TemplateItem {
   id: string
@@ -33,6 +35,68 @@ interface TemplateItem {
 interface SendLead {
   full_name: string
   mobile: string
+}
+
+function TemplateChoice({
+  item,
+  selected,
+  onSelect,
+}: {
+  item: TemplateItem
+  selected: boolean
+  onSelect: () => void
+}) {
+  const imageUrl = useTemplateImage(item.has_image ? item.id : null)
+  const accent = item.color || DEFAULT_TEMPLATE_COLOR
+  return (
+    <Box
+      component="button"
+      type="button"
+      aria-pressed={selected}
+      onClick={onSelect}
+      sx={{
+        position: 'relative',
+        p: 0,
+        overflow: 'hidden',
+        textAlign: 'left',
+        cursor: 'pointer',
+        borderRadius: '16px',
+        bgcolor: '#fff',
+        opacity: selected ? 1 : 0.55,
+        border: `4px solid ${selected ? accent : '#e6e8ec'}`,
+        boxShadow: selected ? `0 0 0 4px ${accent}` : 'none',
+      }}
+    >
+      <Typography noWrap fontWeight={700} sx={{ px: 1.25, py: 0.9, pr: 5, bgcolor: accent, color: '#fff', fontSize: 14 }}>
+        {item.title}
+      </Typography>
+      {selected ? (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            width: 26,
+            height: 26,
+            borderRadius: '50%',
+            display: 'grid',
+            placeItems: 'center',
+            bgcolor: '#fff',
+            color: accent,
+          }}
+        >
+          <CheckRoundedIcon sx={{ fontSize: 18 }} />
+        </Box>
+      ) : null}
+      {imageUrl ? (
+        <Box component="img" src={imageUrl} alt="" sx={{ width: '100%', height: 132, objectFit: 'cover', display: 'block' }} />
+      ) : (
+        <Box sx={{ height: 132, display: 'grid', placeItems: 'center', color: accent, bgcolor: '#f8fafc' }}>
+          <ImageOutlinedIcon />
+        </Box>
+      )}
+    </Box>
+  )
 }
 
 function imageFilename(blob: Blob, title: string) {
@@ -55,8 +119,8 @@ export function SendTemplateDialog({
   const phone = useMediaQuery(theme.breakpoints.down('md'))
   const { user, refreshUser } = useAuth()
   const [items, setItems] = useState<TemplateItem[]>([])
+  const [loading, setLoading] = useState(false)
   const [templateId, setTemplateId] = useState('')
-  const [imageUrl, setImageUrl] = useState('')
   const [imageBlob, setImageBlob] = useState<Blob | null>(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -67,18 +131,22 @@ export function SendTemplateDialog({
     let cancelled = false
     setError('')
     setNotice('')
+    setLoading(true)
     void refreshUser()
     void api
       .get<{ items: TemplateItem[] }>('/api/v1/message-templates')
       .then((result) => {
         if (cancelled) return
         setItems(result.data.items)
-        setTemplateId((current) => current || result.data.items[0]?.id || '')
+        setTemplateId('')
       })
       .catch((requestError: unknown) => {
         if (!cancelled) {
           setError(requestError instanceof ApiError ? requestError.message : 'Could not load templates.')
         }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
       })
     return () => {
       cancelled = true
@@ -89,35 +157,22 @@ export function SendTemplateDialog({
 
   useEffect(() => {
     if (!open || !selected?.has_image) {
-      setImageUrl('')
       setImageBlob(null)
       return
     }
     let active = true
-    let objectUrl = ''
     void apiBlob(`/api/v1/message-templates/${selected.id}/image`)
       .then((blob) => {
-        objectUrl = URL.createObjectURL(blob)
-        if (!active) {
-          URL.revokeObjectURL(objectUrl)
-          return
-        }
-        setImageBlob(blob)
-        setImageUrl(objectUrl)
+        if (active) setImageBlob(blob)
       })
       .catch(() => {
-        if (active) {
-          setImageBlob(null)
-          setImageUrl('')
-        }
+        if (active) setImageBlob(null)
       })
     return () => {
       active = false
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
   }, [open, selected])
 
-  const previewMessage = selected ? selected.message.replace(/\{name\}/gi, lead?.full_name ?? '') : ''
   const preview = selected
     ? renderWhatsAppMessage(selected.message, lead?.full_name ?? '', user?.full_name ?? '', user?.mobile ?? null)
     : ''
@@ -145,7 +200,7 @@ export function SendTemplateDialog({
     URL.revokeObjectURL(url)
   }
 
-  async function onSet() {
+  async function onSend() {
     if (!selected || !lead) return
     if (!user?.mobile) {
       setError(
@@ -182,8 +237,13 @@ export function SendTemplateDialog({
   }
 
   return (
-    <Dialog open={open} onClose={busy ? undefined : onClose} fullScreen={phone} fullWidth maxWidth="sm">
-      <DialogTitle>Send message</DialogTitle>
+    <Dialog open={open} onClose={busy ? undefined : onClose} fullScreen={phone} fullWidth maxWidth="md">
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1.5 }}>
+        Send template
+        <IconButton aria-label="Close" onClick={onClose} disabled={busy} edge="end">
+          <CloseRoundedIcon />
+        </IconButton>
+      </DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 0.5 }}>
           {error ? (
@@ -196,45 +256,27 @@ export function SendTemplateDialog({
               {notice}
             </Typography>
           ) : null}
-          {items.length === 0 ? (
+          {loading ? null : items.length === 0 ? (
             <Typography color="text.secondary">Add a template first, from the Templates menu.</Typography>
           ) : (
-            <TextField
-              select
-              label="Template"
-              value={templateId}
-              fullWidth
-              size="small"
-              onChange={(event) => setTemplateId(event.target.value)}
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(3, minmax(0, 1fr))' },
+                gap: 2.5,
+                p: 1,
+              }}
             >
               {items.map((item) => (
-                <MenuItem key={item.id} value={item.id}>
-                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                    <Box
-                      sx={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: '50%',
-                        bgcolor: item.color || DEFAULT_TEMPLATE_COLOR,
-                        flexShrink: 0,
-                      }}
-                    />
-                    <span>{item.title}</span>
-                  </Stack>
-                </MenuItem>
+                <TemplateChoice
+                  key={item.id}
+                  item={item}
+                  selected={item.id === templateId}
+                  onSelect={() => setTemplateId(item.id)}
+                />
               ))}
-            </TextField>
+            </Box>
           )}
-          {selected ? (
-            <TemplatePreview
-              title={selected.title}
-              message={previewMessage}
-              imageUrl={imageUrl}
-              senderName={user?.full_name ?? ''}
-              senderMobile={user?.mobile ?? null}
-              color={selected.color || DEFAULT_TEMPLATE_COLOR}
-            />
-          ) : null}
           {!phone && selected?.has_image ? (
             <Stack direction="row" spacing={1}>
               <Button startIcon={<ContentCopyOutlinedIcon />} onClick={() => void copyImage()} disabled={!imageBlob}>
@@ -245,21 +287,11 @@ export function SendTemplateDialog({
               </Button>
             </Stack>
           ) : null}
-          {!phone && selected ? (
-            <Typography variant="body2" color="text.secondary">
-              {selected.has_image
-                ? 'WhatsApp opens with this message. You pick one chat. Copy or download the image, then paste it into that chat.'
-                : 'WhatsApp opens with this message. You pick one chat.'}
-            </Typography>
-          ) : null}
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={busy}>
-          Cancel
-        </Button>
-        <Button variant="contained" onClick={() => void onSet()} disabled={busy || !selected || !user?.mobile}>
-          Set
+        <Button variant="contained" onClick={() => void onSend()} disabled={busy || !selected || !user?.mobile}>
+          Send
         </Button>
       </DialogActions>
     </Dialog>
