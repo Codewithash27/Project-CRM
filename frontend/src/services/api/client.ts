@@ -161,11 +161,23 @@ async function request<T>(
   return (await response.json()) as ApiSuccess<T>
 }
 
+export async function apiBlob(path: string): Promise<Blob> {
+  const response = await fetch(`${baseUrl}${path}`, {
+    credentials: 'include',
+    headers: { Accept: 'image/*' },
+  })
+  if (!response.ok) {
+    throw await toApiError(response)
+  }
+  return response.blob()
+}
+
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
   postForm: <T>(path: string, body: FormData) => request<T>('POST', path, body, true, true),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
+  patchForm: <T>(path: string, body: FormData) => request<T>('PATCH', path, body, true, true),
   delete: <T>(path: string) => request<T>('DELETE', path),
 }

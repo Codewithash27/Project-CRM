@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.common.mobile import normalize_mobile
+
 
 def _collapse(value: str) -> str:
     return " ".join(value.split())
@@ -22,6 +24,7 @@ class TeamPerson(BaseModel):
     id: str
     full_name: str
     email: str
+    mobile: str | None
     role: str
     company_id: str | None
     company_name: str | None
@@ -67,6 +70,7 @@ class CreateSalespersonRequest(BaseModel):
     full_name: str = Field(min_length=2, max_length=120)
     email: str = Field(min_length=3, max_length=255)
     password: str = Field(min_length=8, max_length=128)
+    mobile: str = Field(min_length=8, max_length=20)
 
     @field_validator("full_name")
     @classmethod
@@ -80,6 +84,51 @@ class CreateSalespersonRequest(BaseModel):
     @classmethod
     def clean_email(cls, value: str) -> str:
         return value.strip().lower()
+
+    @field_validator("mobile")
+    @classmethod
+    def clean_mobile(cls, value: str) -> str:
+        cleaned = normalize_mobile(value)
+        if cleaned is None:
+            raise ValueError("Mobile number must be 10 or 12 digits.")
+        return cleaned
+
+
+class UpdateSalespersonRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    full_name: str = Field(min_length=2, max_length=120)
+    mobile: str = Field(min_length=8, max_length=20)
+
+    @field_validator("full_name")
+    @classmethod
+    def clean_name(cls, value: str) -> str:
+        cleaned = _collapse(value)
+        if len(cleaned) < 2:
+            raise ValueError("Full name must be at least 2 characters.")
+        return cleaned
+
+    @field_validator("mobile")
+    @classmethod
+    def clean_mobile(cls, value: str) -> str:
+        cleaned = normalize_mobile(value)
+        if cleaned is None:
+            raise ValueError("Mobile number must be 10 or 12 digits.")
+        return cleaned
+
+
+class UpdateOwnMobileRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mobile: str = Field(min_length=8, max_length=20)
+
+    @field_validator("mobile")
+    @classmethod
+    def clean_mobile(cls, value: str) -> str:
+        cleaned = normalize_mobile(value)
+        if cleaned is None:
+            raise ValueError("Mobile number must be 10 or 12 digits.")
+        return cleaned
 
 
 class MoveLeadsRequest(BaseModel):

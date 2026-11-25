@@ -382,6 +382,7 @@ def create_managed_user(
         company_id=company_id,
         team_id=payload.team_id,
         manager_id=payload.manager_id,
+        mobile=payload.mobile,
         created_at=now,
         updated_at=now,
     )
@@ -407,6 +408,7 @@ def create_managed_user(
             "company_id": None if company_id is None else str(company_id),
             "team_id": None if payload.team_id is None else str(payload.team_id),
             "manager_id": None if payload.manager_id is None else str(payload.manager_id),
+            "mobile": payload.mobile,
             "is_active": payload.is_active,
         },
         ip_address=ip_address,
@@ -554,6 +556,9 @@ def update_managed_user(
             _assert_manager(db, payload.manager_id, company_id, target.id)
         target.manager_id = payload.manager_id
         changed["manager_id"] = None if target.manager_id is None else str(target.manager_id)
+    if "mobile" in fields and payload.mobile != target.mobile:
+        target.mobile = payload.mobile
+        changed["mobile"] = payload.mobile
     if new_role is not None:
         db.execute(delete(UserRole).where(UserRole.user_id == target.id))
         db.add(UserRole(user_id=target.id, role_id=new_role.id, created_at=now))

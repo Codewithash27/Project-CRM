@@ -53,6 +53,7 @@ class Settings(BaseSettings):
 
     email_backend: Literal["file", "smtp", "memory"] | None = None
     email_outbox_dir: str = "var/outbox"
+    template_image_dir: str = "var/template-images"
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_user: str = ""

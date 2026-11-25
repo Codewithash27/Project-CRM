@@ -22,6 +22,7 @@ from app.core.security_headers import SecurityHeadersMiddleware
 from app.kpis.router import router as kpis_router
 from app.lead_fields.router import router as lead_fields_router
 from app.leads.router import router as leads_router
+from app.message_templates.router import router as message_templates_router
 from app.permissions.router import router as permissions_router
 from app.pipeline.router import router as pipeline_router
 from app.projects.router import router as projects_router
@@ -49,7 +50,9 @@ _FIELD_LABELS = {
     "industry": "Industry",
     "label": "Field name",
     "lead_source": "Lead source",
+    "image": "Image",
     "manager_id": "Manager",
+    "message": "Message",
     "mobile": "Mobile number",
     "name": "Name",
     "next_followup_at": "Follow-up date",
@@ -222,6 +225,7 @@ def create_app() -> FastAPI:
     app.include_router(businesses_router, prefix="/api/v1/businesses", tags=["Businesses"])
     app.include_router(users_router, prefix="/api/v1/users", tags=["Users"])
     app.include_router(leads_router, prefix="/api/v1/leads", tags=["Leads"])
+    app.include_router(message_templates_router, prefix="/api/v1/message-templates", tags=["Message Templates"])
     app.include_router(kpis_router, prefix="/api/v1/kpis", tags=["KPIs"])
     app.include_router(lead_fields_router, prefix="/api/v1/lead-fields", tags=["Lead Fields"])
     app.include_router(pipeline_router, prefix="/api/v1/pipeline-stages", tags=["Pipeline"])

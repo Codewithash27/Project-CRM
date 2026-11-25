@@ -5,6 +5,7 @@ import PhoneInTalkOutlinedIcon from '@mui/icons-material/PhoneInTalkOutlined'
 import PhoneMissedOutlinedIcon from '@mui/icons-material/PhoneMissedOutlined'
 import SnoozeOutlinedIcon from '@mui/icons-material/SnoozeOutlined'
 import TodayOutlinedIcon from '@mui/icons-material/TodayOutlined'
+import WhatsAppIcon from '@mui/icons-material/WhatsApp'
 import {
   Box,
   Button,
@@ -64,6 +65,7 @@ import { ApiError } from '../../services/api/errors'
 import { api } from '../../services/api/client'
 import { useAuth } from '../../store/auth-context'
 import { ReminderLeadDrawer } from '../components/ReminderLeadDrawer'
+import { SendTemplateDialog } from '../components/SendTemplateDialog'
 import { setReminderBadge } from '../reminder-badge'
 
 type WhenFilter = 'ALL' | 'o' | 't' | 'u'
@@ -163,6 +165,7 @@ export function RemindersPage() {
   const [rescheduleDate, setRescheduleDate] = useState(() => isoToDateInput(addDaysIso(null, 1)))
   const [drawerLeadId, setDrawerLeadId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Lead | null>(null)
+  const [sendLead, setSendLead] = useState<Lead | null>(null)
   const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
@@ -826,6 +829,19 @@ export function RemindersPage() {
                         ml: { xs: '54px', md: 0 },
                       }}
                     >
+                      <Tooltip title="Send message (WhatsApp)">
+                        <span>
+                          <IconButton
+                            size="small"
+                            disabled={saving}
+                            aria-label={`Send message ${lead.full_name}`}
+                            onClick={() => setSendLead(lead)}
+                            sx={{ ...actionIconSx, color: '#128C7E' }}
+                          >
+                            <WhatsAppIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
                       <Tooltip title="Write call summary">
                         <span>
                           <IconButton
@@ -1092,6 +1108,8 @@ export function RemindersPage() {
         onClose={() => setPlanOpen(false)}
         onSaved={setPlan}
       />
+
+      <SendTemplateDialog lead={sendLead} open={Boolean(sendLead)} onClose={() => setSendLead(null)} />
     </Stack>
   )
 }

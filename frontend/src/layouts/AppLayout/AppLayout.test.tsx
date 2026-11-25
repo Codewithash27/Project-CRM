@@ -28,6 +28,7 @@ function profile(roles: string[], permissions: string[] = ['features.read']): Us
     company_id: 'company-id',
     team_id: null,
     manager_id: null,
+    mobile: null,
     roles,
     permissions,
   }

@@ -107,5 +107,6 @@ class UserProfile(BaseModel):
     company_id: str | None
     team_id: str | None
     manager_id: str | None
+    mobile: str | None
     roles: list[str]
     permissions: list[str]

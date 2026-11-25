@@ -2,6 +2,7 @@ import type { SvgIconComponent } from '@mui/icons-material'
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined'
 import SpaceDashboardOutlinedIcon from '@mui/icons-material/SpaceDashboardOutlined'
 import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined'
+import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 import DomainOutlinedIcon from '@mui/icons-material/DomainOutlined'
 import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined'
 import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined'
@@ -68,6 +69,14 @@ export const NAV_ITEMS: readonly NavItem[] = [
     roles: [...SUPER_ADMIN, ...OWNER],
     ready: true,
     icon: GroupsOutlinedIcon,
+  },
+  {
+    id: 'templates',
+    path: '/app/templates',
+    section: 'menu',
+    roles: [...OWNER, ...SALES],
+    ready: true,
+    icon: ChatOutlinedIcon,
   },
   { id: 'reminders', path: '/app/reminders', section: 'menu', roles: SALES, ready: true, icon: TodayOutlinedIcon },
   { id: 'leads', path: '/app/leads', section: 'menu', roles: [...OWNER, ...SALES], ready: true, icon: PersonSearchOutlinedIcon },

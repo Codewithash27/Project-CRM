@@ -14,8 +14,18 @@ from app.team.schemas import (
     MoveLeadsResult,
     SetAssignmentRequest,
     TeamBoardData,
+    UpdateOwnMobileRequest,
+    UpdateSalespersonRequest,
 )
-from app.team.service import create_salesperson, get_team_board, move_leads, remove_salesperson, set_assignment
+from app.team.service import (
+    create_salesperson,
+    get_team_board,
+    move_leads,
+    remove_salesperson,
+    set_assignment,
+    update_own_mobile,
+    update_salesperson,
+)
 from app.users.models import User
 
 router = APIRouter()
@@ -73,6 +83,39 @@ def post_salesperson(
 ) -> ApiResponse[TeamBoardData]:
     board = create_salesperson(db, actor, payload, client_ip(request))
     return ApiResponse(data=board, message="Salesperson added.")
+
+
+@router.patch(
+    "/mobile",
+    response_model=ApiResponse[TeamBoardData],
+    summary="Save the business owner's WhatsApp number",
+    responses=error_responses(401, 403, 422),
+)
+def patch_own_mobile(
+    payload: UpdateOwnMobileRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+) -> ApiResponse[TeamBoardData]:
+    board = update_own_mobile(db, actor, payload, client_ip(request))
+    return ApiResponse(data=board, message="Mobile number saved.")
+
+
+@router.patch(
+    "/salespeople/{user_id}",
+    response_model=ApiResponse[TeamBoardData],
+    summary="Update a salesperson name and mobile number",
+    responses=error_responses(401, 403, 404, 422),
+)
+def patch_salesperson(
+    user_id: uuid.UUID,
+    payload: UpdateSalespersonRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+) -> ApiResponse[TeamBoardData]:
+    board = update_salesperson(db, actor, user_id, payload, client_ip(request))
+    return ApiResponse(data=board, message="Salesperson updated.")
 
 
 @router.delete(

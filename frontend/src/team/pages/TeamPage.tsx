@@ -1,3 +1,4 @@
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import {
   Box,
   Button,
@@ -7,6 +8,7 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  IconButton,
   MenuItem,
   Stack,
   Table,
@@ -28,6 +30,7 @@ import { ErrorAlert } from '../../components/common/ErrorAlert'
 import { LoadingScreen } from '../../components/common/LoadingScreen'
 import { ApiError } from '../../services/api/errors'
 import { api } from '../../services/api/client'
+import { useAuth } from '../../store/auth-context'
 
 interface TeamProject {
   id: string
@@ -41,6 +44,7 @@ interface TeamPerson {
   id: string
   full_name: string
   email: string
+  mobile: string | null
   role: string
   company_id: string | null
   company_name: string | null
@@ -60,9 +64,19 @@ function assignmentKey(projectId: string, userId: string) {
   return `${projectId}:${userId}`
 }
 
+function mobileDigits(value: string) {
+  return value.replace(/\D/g, '')
+}
+
+function mobileIsValid(value: string) {
+  const digits = mobileDigits(value)
+  return digits.length === 10 || digits.length === 12
+}
+
 export function TeamPage() {
   const theme = useTheme()
   const phone = useMediaQuery(theme.breakpoints.down('sm'))
+  const { refreshUser } = useAuth()
   const [board, setBoard] = useState<TeamBoard | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -73,6 +87,11 @@ export function TeamPage() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [mobile, setMobile] = useState('')
+  const [ownMobile, setOwnMobile] = useState('')
+  const [editTarget, setEditTarget] = useState<TeamPerson | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editMobile, setEditMobile] = useState('')
   const [moveProjectId, setMoveProjectId] = useState('')
   const [fromUserId, setFromUserId] = useState('')
   const [toUserId, setToUserId] = useState('')
@@ -84,6 +103,7 @@ export function TeamPage() {
       const query = selectedCompany ? `?company_id=${selectedCompany}` : ''
       const result = await api.get<TeamBoard>(`/api/v1/team${query}`)
       setBoard(result.data)
+      setOwnMobile(result.data.viewer.mobile ?? '')
       if (result.data.mode === 'platform') {
         setCompanyId((current) => selectedCompany || current || result.data.companies[0]?.id || '')
       }
@@ -157,20 +177,87 @@ export function TeamPage() {
     setSaving(true)
     setError('')
     setNotice('')
+    if (!mobileIsValid(mobile)) {
+      setError('Mobile number must be 10 or 12 digits.')
+      setSaving(false)
+      return
+    }
     try {
       const result = await api.post<TeamBoard>('/api/v1/team/salespeople', {
         full_name: fullName,
         email,
         password,
+        mobile,
       })
       setBoard(result.data)
+      setOwnMobile(result.data.viewer.mobile ?? '')
       setAddOpen(false)
       setFullName('')
       setEmail('')
       setPassword('')
+      setMobile('')
       setNotice('Salesperson added.')
     } catch (requestError) {
       setError(requestError instanceof ApiError ? requestError.message : 'Could not add salesperson.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function onSaveOwnMobile(event: FormEvent) {
+    event.preventDefault()
+    if (!mobileIsValid(ownMobile)) {
+      setError('Mobile number must be 10 or 12 digits.')
+      return
+    }
+    setSaving(true)
+    setError('')
+    setNotice('')
+    try {
+      const result = await api.patch<TeamBoard>('/api/v1/team/mobile', { mobile: ownMobile })
+      setBoard(result.data)
+      setOwnMobile(result.data.viewer.mobile ?? '')
+      await refreshUser()
+      setNotice('Your mobile number was saved.')
+    } catch (requestError) {
+      setError(requestError instanceof ApiError ? requestError.message : 'Could not save your mobile number.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function openEdit(person: TeamPerson) {
+    setEditTarget(person)
+    setEditName(person.full_name)
+    setEditMobile(person.mobile ?? '')
+    setError('')
+  }
+
+  async function onEditSalesperson(event: FormEvent) {
+    event.preventDefault()
+    if (!editTarget) return
+    if (editName.trim().length < 2) {
+      setError('Enter the salesperson name.')
+      return
+    }
+    if (!mobileIsValid(editMobile)) {
+      setError('Mobile number must be 10 or 12 digits.')
+      return
+    }
+    setSaving(true)
+    setError('')
+    setNotice('')
+    try {
+      const result = await api.patch<TeamBoard>(`/api/v1/team/salespeople/${editTarget.id}`, {
+        full_name: editName.trim(),
+        mobile: editMobile,
+      })
+      setBoard(result.data)
+      setOwnMobile(result.data.viewer.mobile ?? '')
+      setEditTarget(null)
+      setNotice('Salesperson updated.')
+    } catch (requestError) {
+      setError(requestError instanceof ApiError ? requestError.message : 'Could not update this salesperson.')
     } finally {
       setSaving(false)
     }
@@ -246,6 +333,40 @@ export function TeamPage() {
         </Typography>
       ) : null}
 
+      {!isPlatform ? (
+        <Box
+          component="form"
+          onSubmit={(event) => void onSaveOwnMobile(event)}
+          sx={{
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            bgcolor: 'background.paper',
+            p: 2,
+          }}
+        >
+          <Typography fontWeight={600}>Your WhatsApp number</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            This name and number are added at the end of messages you send.
+          </Typography>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'flex-start' } }}>
+            <TextField
+              label="Mobile number"
+              value={ownMobile}
+              required
+              disabled={saving}
+              placeholder="9876543210"
+              autoComplete="tel"
+              onChange={(event) => setOwnMobile(event.target.value)}
+              sx={{ maxWidth: 280 }}
+            />
+            <Button type="submit" variant="contained" disabled={saving}>
+              Save number
+            </Button>
+          </Stack>
+        </Box>
+      ) : null}
+
       {isPlatform ? (
         <TextField
           select
@@ -311,16 +432,31 @@ export function TeamPage() {
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
                       <Box sx={{ minWidth: 0 }}>
                         <Typography fontWeight={600}>{person.full_name}</Typography>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" color="text.secondary" display="block">
                           {person.email}
                         </Typography>
+                        {person.mobile ? (
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            {person.mobile}
+                          </Typography>
+                        ) : null}
                       </Box>
                       {!isPlatform && person.role === 'SALESPERSON' ? (
-                        <DeleteIconButton
-                          onClick={() => setDeleteTarget(person)}
-                          disabled={saving}
-                          tooltip={`Delete ${person.full_name}`}
-                        />
+                        <Stack direction="row" spacing={0.5}>
+                          <IconButton
+                            size="small"
+                            aria-label={`Edit ${person.full_name}`}
+                            disabled={saving}
+                            onClick={() => openEdit(person)}
+                          >
+                            <EditOutlinedIcon fontSize="small" />
+                          </IconButton>
+                          <DeleteIconButton
+                            onClick={() => setDeleteTarget(person)}
+                            disabled={saving}
+                            tooltip={`Delete ${person.full_name}`}
+                          />
+                        </Stack>
                       ) : null}
                     </Stack>
                   </TableCell>
@@ -517,12 +653,60 @@ export function TeamPage() {
                 disabled={saving}
                 onChange={setPassword}
               />
+              <TextField
+                label="Mobile number"
+                value={mobile}
+                required
+                fullWidth
+                disabled={saving}
+                placeholder="9876543210"
+                helperText="Added at the end of WhatsApp messages this person sends."
+                autoComplete="off"
+                onChange={(event) => setMobile(event.target.value)}
+              />
             </Stack>
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setAddOpen(false)}>Cancel</Button>
             <Button type="submit" variant="contained" disabled={saving}>
               Add
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+
+      <Dialog open={Boolean(editTarget)} onClose={() => { if (!saving) setEditTarget(null) }} fullScreen={phone} fullWidth maxWidth="sm">
+        <Box component="form" onSubmit={(event) => void onEditSalesperson(event)}>
+          <DialogTitle>Edit salesperson</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 0.5 }}>
+              <TextField
+                label="Full name"
+                value={editName}
+                required
+                fullWidth
+                disabled={saving}
+                onChange={(event) => setEditName(event.target.value)}
+              />
+              <TextField
+                label="Mobile number"
+                value={editMobile}
+                required
+                fullWidth
+                disabled={saving}
+                placeholder="9876543210"
+                helperText="Added at the end of WhatsApp messages this person sends."
+                autoComplete="off"
+                onChange={(event) => setEditMobile(event.target.value)}
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button type="button" onClick={() => setEditTarget(null)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="contained" disabled={saving}>
+              Save
             </Button>
           </DialogActions>
         </Box>

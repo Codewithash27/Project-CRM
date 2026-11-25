@@ -1,0 +1,1 @@
+"""Company WhatsApp message templates."""

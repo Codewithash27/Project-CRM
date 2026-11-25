@@ -28,6 +28,7 @@ const student: UserProfile = {
   company_id: null,
   team_id: null,
   manager_id: null,
+  mobile: null,
   roles: ['SALESPERSON'],
   permissions: ['features.read'],
 }

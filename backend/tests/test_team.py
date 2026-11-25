@@ -128,11 +128,17 @@ async def test_owner_assigns_salesperson_adds_rep_and_moves_leads(client):
 
     added = await client.post(
         "/api/v1/team/salespeople",
-        json={"full_name": "New Rep", "email": "new.rep@example.com", "password": VALID_PASSWORD},
+        json={
+            "full_name": "New Rep",
+            "email": "new.rep@example.com",
+            "password": VALID_PASSWORD,
+            "mobile": "9876543210",
+        },
         headers=await csrf_headers(client),
     )
     assert added.status_code == 200
-    assert any(person["email"] == "new.rep@example.com" for person in added.json()["data"]["people"])
+    added_person = next(person for person in added.json()["data"]["people"] if person["email"] == "new.rep@example.com")
+    assert added_person["mobile"] == "9876543210"
 
     assert (await login(client, email="rep@example.com")).status_code == 200
     lead = await client.post(

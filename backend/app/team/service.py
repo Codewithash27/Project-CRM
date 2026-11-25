@@ -28,6 +28,8 @@ from app.team.schemas import (
     TeamLeadCount,
     TeamPerson,
     TeamProject,
+    UpdateOwnMobileRequest,
+    UpdateSalespersonRequest,
 )
 from app.users.models import User
 from app.users.service import _password_error
@@ -73,6 +75,7 @@ def _person(user: User, company_name: str | None = None) -> TeamPerson:
         id=str(user.id),
         full_name=user.full_name,
         email=user.email,
+        mobile=user.mobile,
         role=_primary_role(user),
         company_id=None if user.company_id is None else str(user.company_id),
         company_name=company_name,
@@ -444,6 +447,7 @@ def create_salesperson(
         email_verified=False,
         session_version=1,
         company_id=actor.company_id,
+        mobile=payload.mobile,
         created_at=now,
         updated_at=now,
     )
@@ -460,11 +464,69 @@ def create_salesperson(
         actor_id=actor.id,
         target_type="user",
         target_id=user.id,
-        context={"company_id": str(actor.company_id)},
+        context={"company_id": str(actor.company_id), "mobile": payload.mobile},
         ip_address=ip_address,
     )
     db.commit()
     log_event(logger, "salesperson_created", actor_id=str(actor.id), target_id=str(user.id))
+    return get_team_board(db, actor)
+
+
+def update_salesperson(
+    db: Session,
+    actor: User,
+    user_id: uuid.UUID,
+    payload: UpdateSalespersonRequest,
+    ip_address: str | None,
+) -> TeamBoardData:
+    if not _is_owner(actor) or actor.company_id is None:
+        raise _forbidden()
+    target = db.get(User, user_id)
+    if (
+        target is None
+        or not target.is_active
+        or target.company_id != actor.company_id
+        or RoleName.SALESPERSON not in _role_names(target)
+    ):
+        raise AppError(ErrorCode.NOT_FOUND, "Salesperson not found.", 404)
+    target.full_name = payload.full_name
+    target.mobile = payload.mobile
+    target.updated_at = datetime.now(UTC)
+    record_audit(
+        db,
+        action="salesperson_updated",
+        actor_id=actor.id,
+        target_type="user",
+        target_id=target.id,
+        context={"full_name": payload.full_name, "mobile": payload.mobile},
+        ip_address=ip_address,
+    )
+    db.commit()
+    log_event(logger, "salesperson_updated", actor_id=str(actor.id), target_id=str(target.id))
+    return get_team_board(db, actor)
+
+
+def update_own_mobile(
+    db: Session,
+    actor: User,
+    payload: UpdateOwnMobileRequest,
+    ip_address: str | None,
+) -> TeamBoardData:
+    if not _is_owner(actor) or actor.company_id is None:
+        raise _forbidden()
+    actor.mobile = payload.mobile
+    actor.updated_at = datetime.now(UTC)
+    record_audit(
+        db,
+        action="mobile_updated",
+        actor_id=actor.id,
+        target_type="user",
+        target_id=actor.id,
+        context={"mobile": payload.mobile},
+        ip_address=ip_address,
+    )
+    db.commit()
+    log_event(logger, "mobile_updated", actor_id=str(actor.id))
     return get_team_board(db, actor)
 
 

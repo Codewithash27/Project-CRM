@@ -81,6 +81,7 @@ export function UsersPage() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [mobile, setMobile] = useState('')
   const [companyId, setCompanyId] = useState('')
   const [role, setRole] = useState('SALESPERSON')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
@@ -90,6 +91,7 @@ export function UsersPage() {
   const [editEmail, setEditEmail] = useState('')
   const [editCompany, setEditCompany] = useState('')
   const [editRole, setEditRole] = useState('SALESPERSON')
+  const [editMobile, setEditMobile] = useState('')
   const [roleTarget, setRoleTarget] = useState<AccessUser | null>(null)
   const [selectedRole, setSelectedRole] = useState('SALESPERSON')
   const [statusTarget, setStatusTarget] = useState<AccessUser | null>(null)
@@ -142,6 +144,7 @@ export function UsersPage() {
       const haystack = [
         account.full_name,
         account.email,
+        account.mobile ?? '',
         account.company_name ?? 'Platform',
         ...account.roles.map((item) => roleLabel(item, t)),
       ]
@@ -154,6 +157,10 @@ export function UsersPage() {
   function closeCreate() {
     if (saving) return
     setCreateOpen(false)
+    setFullName('')
+    setEmail('')
+    setPassword('')
+    setMobile('')
     setFieldErrors({})
   }
 
@@ -163,6 +170,7 @@ export function UsersPage() {
     setEditEmail(account.email)
     setEditCompany(account.company_id ?? '')
     setEditRole(account.roles[0] ?? 'SALESPERSON')
+    setEditMobile(account.mobile ?? '')
     setFieldErrors({})
   }
 
@@ -213,11 +221,13 @@ export function UsersPage() {
         preferred_language: 'en',
       }
       if (companyId) payload.company_id = companyId
+      if (mobile.trim()) payload.mobile = mobile.trim()
       await api.post<AccessUser>('/api/v1/users', payload)
       setNotice(t('access:userCreated'))
       setFullName('')
       setEmail('')
       setPassword('')
+      setMobile('')
       setCreateOpen(false)
       setFieldErrors({})
       await load()
@@ -247,6 +257,7 @@ export function UsersPage() {
         full_name: editName.trim(),
         role: editRole,
         company_id: editCompany || null,
+        mobile: editMobile.trim() || null,
       })
       setNotice(t('access:userUpdated'))
       setEditTarget(null)
@@ -429,6 +440,11 @@ export function UsersPage() {
                     <Typography variant="caption" color="text.secondary" noWrap display="block">
                       {account.email}
                     </Typography>
+                    {account.mobile ? (
+                      <Typography variant="caption" color="text.secondary" noWrap display="block">
+                        {account.mobile}
+                      </Typography>
+                    ) : null}
                   </TableCell>
                   <TableCell sx={{ maxWidth: 0 }}>
                     <Typography variant="body2" noWrap>
@@ -562,6 +578,16 @@ export function UsersPage() {
                 onChange={setPassword}
               />
               <TextField
+                label={t('access:mobileNumber')}
+                value={mobile}
+                fullWidth
+                disabled={saving}
+                placeholder="9876543210"
+                error={Boolean(fieldErrors.mobile)}
+                helperText={fieldErrors.mobile || t('access:mobileHint')}
+                onChange={(event) => setMobile(event.target.value)}
+              />
+              <TextField
                 select
                 label={t('access:organisation')}
                 value={companyId}
@@ -638,6 +664,16 @@ export function UsersPage() {
                 helperText={fieldErrors.full_name}
                 disabled={saving}
                 onChange={(event) => setEditName(event.target.value)}
+              />
+              <TextField
+                label={t('access:mobileNumber')}
+                value={editMobile}
+                fullWidth
+                disabled={saving}
+                placeholder="9876543210"
+                error={Boolean(fieldErrors.mobile)}
+                helperText={fieldErrors.mobile || t('access:mobileHint')}
+                onChange={(event) => setEditMobile(event.target.value)}
               />
               <TextField
                 label={t('auth:email')}

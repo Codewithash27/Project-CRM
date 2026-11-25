@@ -22,9 +22,10 @@ describe('homePathForRoles', () => {
 describe('visibleNav', () => {
   it('gives a salesperson their lead menu and hides setup', () => {
     expect(ids(['SALESPERSON'])).toEqual([
-      'kpis',
-      'projects',
-      'reminders',
+    'kpis',
+    'projects',
+    'templates',
+    'reminders',
       'leads',
       'pipeline',
       'followUps',
@@ -37,6 +38,7 @@ describe('visibleNav', () => {
       'kpis',
       'projects',
       'team',
+      'templates',
       'leads',
       'pipeline',
       'followUps',

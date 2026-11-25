@@ -13,6 +13,7 @@ import { ProjectsPage } from '../../projects/pages/ProjectsPage'
 import { RemindersPage } from '../../reminders/pages/RemindersPage'
 import { RolesPage } from '../../roles/pages/RolesPage'
 import { TeamPage } from '../../team/pages/TeamPage'
+import { TemplatesPage } from '../../templates/pages/TemplatesPage'
 import { UsersPage } from '../../users/pages/UsersPage'
 import { ForgotPasswordPage } from '../../auth/pages/ForgotPasswordPage'
 import { LoginPage } from '../../auth/pages/LoginPage'
@@ -69,6 +70,14 @@ export function AppRoutes() {
         />
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="team" element={<TeamPage />} />
+        <Route
+          path="templates"
+          element={
+            <RoleRoute roles={['BUSINESS_OWNER', 'SALESPERSON']}>
+              <TemplatesPage />
+            </RoleRoute>
+          }
+        />
         <Route path="leads" element={<LeadsPage />} />
         <Route path="lead-fields" element={<LeadFieldsPage />} />
         <Route path="pipeline" element={<PipelinePage />} />
@@ -106,6 +115,7 @@ export function AppRoutes() {
             item.id !== 'roles' &&
             item.id !== 'projects' &&
             item.id !== 'team' &&
+            item.id !== 'templates' &&
             item.id !== 'leads' &&
             item.id !== 'pipeline' &&
             item.id !== 'reminders' &&

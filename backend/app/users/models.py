@@ -28,6 +28,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    mobile: Mapped[str | None] = mapped_column(String(20), nullable=True)
     preferred_language: Mapped[str] = mapped_column(
         String(8), nullable=False, server_default=text("'en'")
     )

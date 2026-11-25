@@ -174,7 +174,8 @@ def create_user(
     response_model=ApiResponse[AccessUser],
     summary="Update a user",
     description=(
-        "Updates name, email, password, role, organisation, team, manager, or active status. Requires users.update. "
+        "Updates name, email, mobile, password, role, organisation, team, manager, or active status. "
+        "Requires users.update. "
         "Changing the role also requires roles.assign. "
         "A company administrator can update users only in their own company."
     ),

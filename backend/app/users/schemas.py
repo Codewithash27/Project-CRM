@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.auth.schemas import RegisteredUser, UserProfile, normalize_email
+from app.common.mobile import normalize_mobile
 from app.permissions.service import get_permission_keys
 from app.users.models import User
 
@@ -15,6 +16,7 @@ class AccessUser(BaseModel):
     id: str
     full_name: str
     email: str
+    mobile: str | None
     roles: list[str]
     is_active: bool
     company_id: str | None
@@ -55,6 +57,7 @@ class CreateUserRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=128)
     role: str = Field(min_length=1, max_length=50)
+    mobile: str | None = None
     company_id: uuid.UUID | None = None
     team_id: uuid.UUID | None = None
     manager_id: uuid.UUID | None = None
@@ -76,6 +79,14 @@ class CreateUserRequest(BaseModel):
             return normalize_email(value)
         return value
 
+    @field_validator("mobile")
+    @classmethod
+    def clean_mobile(cls, value: str | None) -> str | None:
+        try:
+            return normalize_mobile(value)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+
 
 class UpdateManagedUserRequest(BaseModel):
     """Fields the caller sent are tracked so null can clear organisation, team, or manager."""
@@ -86,6 +97,7 @@ class UpdateManagedUserRequest(BaseModel):
     email: EmailStr | None = None
     password: str | None = None
     role: str | None = None
+    mobile: str | None = None
     company_id: uuid.UUID | None = None
     team_id: uuid.UUID | None = None
     manager_id: uuid.UUID | None = None
@@ -114,6 +126,14 @@ class UpdateManagedUserRequest(BaseModel):
         if value is None or not value.strip():
             return None
         return value
+
+    @field_validator("mobile")
+    @classmethod
+    def clean_mobile(cls, value: str | None) -> str | None:
+        try:
+            return normalize_mobile(value)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
 
 
 def role_names(user: User) -> list[str]:
@@ -147,6 +167,7 @@ def to_user_profile(db: Session, user: User) -> UserProfile:
         company_id=_optional_id(user.company_id),
         team_id=_optional_id(user.team_id),
         manager_id=_optional_id(user.manager_id),
+        mobile=user.mobile,
         roles=role_names(user),
         permissions=sorted(get_permission_keys(db, user.id)),
     )
@@ -157,6 +178,7 @@ def to_access_user(user: User, company_name: str | None = None) -> AccessUser:
         id=str(user.id),
         full_name=user.full_name,
         email=user.email,
+        mobile=user.mobile,
         roles=role_names(user),
         is_active=user.is_active,
         company_id=_optional_id(user.company_id),

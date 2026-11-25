@@ -8,6 +8,7 @@ export interface UserProfile {
   company_id: string | null
   team_id: string | null
   manager_id: string | null
+  mobile: string | null
   roles: string[]
   permissions: string[]
 }
@@ -39,6 +40,7 @@ export interface AccessUser {
   id: string
   full_name: string
   email: string
+  mobile: string | null
   roles: string[]
   is_active: boolean
   company_id: string | null

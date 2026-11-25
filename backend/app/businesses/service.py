@@ -7,9 +7,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.audit.service import record_audit
-from app.businesses.schemas import CreateBusinessRequest, UpdateBusinessRequest, BusinessPublic
+from app.businesses.schemas import BusinessPublic, CreateBusinessRequest, UpdateBusinessRequest
 from app.common.exceptions import AppError, ErrorCode
 from app.leads.models import Lead
+from app.message_templates.service import ensure_default_templates
 from app.organization.models import Company, Project, Team
 from app.roles.service import RoleName
 from app.users.models import User
@@ -125,6 +126,7 @@ def create_business(
     _apply_profile(company, payload)
     db.add(company)
     db.flush()
+    ensure_default_templates(db, company.id)
     record_audit(
         db,
         action="business_created",
