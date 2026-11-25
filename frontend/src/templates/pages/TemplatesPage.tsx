@@ -281,14 +281,9 @@ export function TemplatesPage() {
   return (
     <Stack spacing={2.5}>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' } }}>
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="h5" fontWeight={700}>
-            Templates
-          </Typography>
-          <Typography color="text.secondary">
-            Each card is the message preview: title, image, message, then your name and number.
-          </Typography>
-        </Box>
+        <Typography variant="h5" fontWeight={700} sx={{ flex: 1 }}>
+          Templates
+        </Typography>
         <Button variant="contained" onClick={openCreate} sx={{ alignSelf: { xs: 'stretch', sm: 'center' } }}>
           + Add Template
         </Button>

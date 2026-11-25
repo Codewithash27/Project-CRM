@@ -199,7 +199,7 @@ export function ReminderLeadDrawer({ lead, canUpdate, canDelete = false, plan, o
   const [localError, setLocalError] = useState('')
   const [action, setAction] = useState<ActionKind>(null)
   const [actionNote, setActionNote] = useState('')
-  const [customDueDate, setCustomDueDate] = useState(() => isoToDateInput(addDaysIso(null, 1)))
+  const [customDueDate, setCustomDueDate] = useState('')
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [confirmClearOpen, setConfirmClearOpen] = useState(false)
 
@@ -219,12 +219,13 @@ export function ReminderLeadDrawer({ lead, canUpdate, canDelete = false, plan, o
       setCalls([])
       setLocalError('')
       setAction(null)
+      setCustomDueDate('')
       return
     }
     setForm(formFromLead(lead))
     setLocalError('')
     setAction(null)
-    setCustomDueDate(isoToDateInput(lead.next_followup_at) || isoToDateInput(addDaysIso(null, 1)))
+    setCustomDueDate(isoToDateInput(lead.next_followup_at))
     void loadCalls(lead.id)
     void (async () => {
       if (!lead.project_id) {

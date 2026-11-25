@@ -446,29 +446,55 @@ export function RemindersPage() {
 
   return (
     <Stack spacing={1.25}>
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
         <Typography variant="h1" sx={{ flex: 1 }}>
           Reminders
         </Typography>
-        <ColumnChooser
-          columns={columnDefs}
-          visibility={columnVisibility}
-          onToggle={toggleColumn}
-          onReset={resetColumns}
-        />
-        {canUpdate ? (
-          <Tooltip title="Add reminder">
-            <IconButton
-              size="small"
-              color="primary"
-              aria-label="Add reminder"
-              onClick={() => setAddOpen(true)}
-              sx={toolbarIconSx}
-            >
-              <AddOutlinedIcon sx={{ fontSize: 18 }} />
-            </IconButton>
-          </Tooltip>
-        ) : null}
+        <Stack direction="row" spacing={0.5} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+          <RadioGroup
+            row
+            name="reminder-view"
+            aria-label="Reminder view"
+            value={view}
+            onChange={(event) => setView(event.target.value as ReminderView)}
+            sx={{ columnGap: 1.5 }}
+          >
+            {VIEW_OPTIONS.map((option) => (
+              <FormControlLabel
+                key={option.value}
+                value={option.value}
+                disabled={!projectId}
+                control={<Radio size="small" />}
+                label={
+                  <Typography variant="body2">
+                    {option.label}
+                    {projectId ? ` (${option.value === 'new' ? viewCounts.new : viewCounts.reminders})` : ''}
+                  </Typography>
+                }
+                sx={{ m: 0, mr: 0.5 }}
+              />
+            ))}
+          </RadioGroup>
+          <ColumnChooser
+            columns={columnDefs}
+            visibility={columnVisibility}
+            onToggle={toggleColumn}
+            onReset={resetColumns}
+          />
+          {canUpdate ? (
+            <Tooltip title="Add reminder">
+              <IconButton
+                size="small"
+                color="primary"
+                aria-label="Add reminder"
+                onClick={() => setAddOpen(true)}
+                sx={toolbarIconSx}
+              >
+                <AddOutlinedIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            </Tooltip>
+          ) : null}
+        </Stack>
       </Stack>
 
       {error ? <ErrorAlert message={error} /> : null}
@@ -477,31 +503,6 @@ export function RemindersPage() {
           <Typography variant="body2">{notice}</Typography>
         </Box>
       ) : null}
-
-      <RadioGroup
-        row
-        name="reminder-view"
-        aria-label="Reminder view"
-        value={view}
-        onChange={(event) => setView(event.target.value as ReminderView)}
-        sx={{ columnGap: 2.5 }}
-      >
-        {VIEW_OPTIONS.map((option) => (
-          <FormControlLabel
-            key={option.value}
-            value={option.value}
-            disabled={!projectId}
-            control={<Radio size="small" />}
-            label={
-              <Typography variant="body2">
-                {option.label}
-                {projectId ? ` (${option.value === 'new' ? viewCounts.new : viewCounts.reminders})` : ''}
-              </Typography>
-            }
-            sx={{ m: 0 }}
-          />
-        ))}
-      </RadioGroup>
 
       <Box
         sx={{

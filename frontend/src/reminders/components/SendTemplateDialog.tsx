@@ -1,12 +1,15 @@
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined'
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined'
 import {
+  Box,
   Button,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  MenuItem,
   Stack,
+  TextField,
   Typography,
   useMediaQuery,
 } from '@mui/material'
@@ -196,28 +199,31 @@ export function SendTemplateDialog({
           {items.length === 0 ? (
             <Typography color="text.secondary">Add a template first, from the Templates menu.</Typography>
           ) : (
-            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-              {items.map((item) => {
-                const active = item.id === templateId
-                const accent = item.color || DEFAULT_TEMPLATE_COLOR
-                return (
-                  <Button
-                    key={item.id}
-                    onClick={() => setTemplateId(item.id)}
-                    sx={{
-                      borderRadius: '999px',
-                      px: 1.5,
-                      color: active ? '#fff' : accent,
-                      bgcolor: active ? accent : '#fff',
-                      border: `1px solid ${accent}`,
-                      '&:hover': { bgcolor: active ? accent : '#f8fafc' },
-                    }}
-                  >
-                    {item.title}
-                  </Button>
-                )
-              })}
-            </Stack>
+            <TextField
+              select
+              label="Template"
+              value={templateId}
+              fullWidth
+              size="small"
+              onChange={(event) => setTemplateId(event.target.value)}
+            >
+              {items.map((item) => (
+                <MenuItem key={item.id} value={item.id}>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                    <Box
+                      sx={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: '50%',
+                        bgcolor: item.color || DEFAULT_TEMPLATE_COLOR,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <span>{item.title}</span>
+                  </Stack>
+                </MenuItem>
+              ))}
+            </TextField>
           )}
           {selected ? (
             <TemplatePreview
