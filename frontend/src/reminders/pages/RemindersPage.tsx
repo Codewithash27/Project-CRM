@@ -15,8 +15,11 @@ import {
   DialogContent,
   DialogTitle,
   Drawer,
+  FormControlLabel,
   IconButton,
   MenuItem,
+  Radio,
+  RadioGroup,
   Stack,
   TextField,
   Tooltip,
@@ -64,6 +67,13 @@ import { ReminderLeadDrawer } from '../components/ReminderLeadDrawer'
 import { setReminderBadge } from '../reminder-badge'
 
 type WhenFilter = 'ALL' | 'o' | 't' | 'u'
+/** 'reminders' = leads with a reminder date; 'new' = new leads that have no reminder yet. */
+type ReminderView = 'reminders' | 'new'
+
+const VIEW_OPTIONS: { value: ReminderView; label: string }[] = [
+  { value: 'reminders', label: 'Reminder' },
+  { value: 'new', label: 'No reminder' },
+]
 type SortBy = 'time' | 'pri' | 'name'
 
 const WHEN_LABEL: Record<WhenFilter, string> = {
@@ -73,10 +83,11 @@ const WHEN_LABEL: Record<WhenFilter, string> = {
   u: 'Upcoming reminders',
 }
 
-const WHEN_CHIP: Record<Exclude<FollowWhen, 'ALL'>, { label: string; bg: string; color: string }> = {
+const WHEN_CHIP: Record<FollowWhen | 'n', { label: string; bg: string; color: string }> = {
   o: { label: 'Overdue', bg: '#fee2e2', color: '#b91c1c' },
   t: { label: 'Due today', bg: '#fef3c7', color: '#92400e' },
   u: { label: 'Upcoming', bg: '#e0ecff', color: '#1d4ed8' },
+  n: { label: 'No reminder', bg: '#f1f5f9', color: '#475569' },
 }
 
 const PRI_TONE: Record<LeadPriority, { bg: string; color: string }> = {
@@ -134,6 +145,7 @@ export function RemindersPage() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [when, setWhen] = useState<WhenFilter>('ALL')
+  const [view, setView] = useState<ReminderView>('reminders')
   const [projectId, setProjectId] = useState('')
   const loadSeq = useRef(0)
   const [priority, setPriority] = useState('')
@@ -212,9 +224,20 @@ export function RemindersPage() {
   }, [load])
 
   const withFollowup = useMemo(
-    () => leads.filter((lead) => Boolean(lead.next_followup_at)),
-    [leads],
+    () =>
+      view === 'new'
+        ? leads.filter((lead) => !lead.next_followup_at && lead.status === 'new')
+        : leads.filter((lead) => Boolean(lead.next_followup_at)),
+    [leads, view],
   )
+
+  const viewCounts = useMemo(() => {
+    const inProject = projectId ? leads.filter((lead) => lead.project_id === projectId) : leads
+    return {
+      reminders: inProject.filter((lead) => Boolean(lead.next_followup_at)).length,
+      new: inProject.filter((lead) => !lead.next_followup_at && lead.status === 'new').length,
+    }
+  }, [leads, projectId])
 
   const scopedFollowup = useMemo(() => {
     if (!projectId) return withFollowup
@@ -225,7 +248,7 @@ export function RemindersPage() {
     const q = search.trim().toLowerCase()
     const rows = scopedFollowup.filter((lead) => {
       const bucket = followWhen(lead.next_followup_at)
-      if (when !== 'ALL' && bucket !== when) return false
+      if (view === 'reminders' && when !== 'ALL' && bucket !== when) return false
       if (priority && lead.priority !== priority) return false
       if (
         q &&
@@ -257,7 +280,7 @@ export function RemindersPage() {
       return (a.next_followup_at ?? '').localeCompare(b.next_followup_at ?? '') || rank(a.priority) - rank(b.priority)
     })
     return rows
-  }, [priority, scopedFollowup, search, sort, when])
+  }, [priority, scopedFollowup, search, sort, view, when])
 
   const perPage = 21
   const pages = Math.max(1, Math.ceil(filtered.length / perPage))
@@ -268,12 +291,13 @@ export function RemindersPage() {
   useEffect(() => {
     setPage(1)
     setSelected([])
-  }, [when, priority, search, sort, projectId])
+  }, [when, view, priority, search, sort, projectId])
 
   useEffect(() => {
-    if (loading) return
+    // The badge counts reminders only; the "new leads without reminder" view leaves it unchanged.
+    if (loading || view === 'new') return
     setReminderBadge(filtered.length)
-  }, [filtered.length, loading])
+  }, [filtered.length, loading, view])
 
   useEffect(() => () => setReminderBadge(null), [])
 
@@ -451,6 +475,31 @@ export function RemindersPage() {
         </Box>
       ) : null}
 
+      <RadioGroup
+        row
+        name="reminder-view"
+        aria-label="Reminder view"
+        value={view}
+        onChange={(event) => setView(event.target.value as ReminderView)}
+        sx={{ columnGap: 2.5 }}
+      >
+        {VIEW_OPTIONS.map((option) => (
+          <FormControlLabel
+            key={option.value}
+            value={option.value}
+            disabled={!projectId}
+            control={<Radio size="small" />}
+            label={
+              <Typography variant="body2">
+                {option.label}
+                {projectId ? ` (${option.value === 'new' ? viewCounts.new : viewCounts.reminders})` : ''}
+              </Typography>
+            }
+            sx={{ m: 0 }}
+          />
+        ))}
+      </RadioGroup>
+
       <Box
         sx={{
           display: 'grid',
@@ -487,7 +536,7 @@ export function RemindersPage() {
           label="When"
           value={when}
           onChange={(event) => setWhen(event.target.value as WhenFilter)}
-          disabled={!projectId}
+          disabled={!projectId || view === 'new'}
         >
           <MenuItem value="ALL">All dates</MenuItem>
           <MenuItem value="o">Overdue</MenuItem>
@@ -528,7 +577,7 @@ export function RemindersPage() {
           }}
         >
           <Typography fontWeight={700} sx={{ flex: 1, fontSize: 16 }}>
-            {WHEN_LABEL[when]} ({filtered.length})
+            {view === 'new' ? 'New leads without reminder' : WHEN_LABEL[when]} ({filtered.length})
           </Typography>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <Typography variant="caption" color="text.secondary">
@@ -573,7 +622,7 @@ export function RemindersPage() {
         {pageRows.length === 0 ? (
           <Box sx={{ p: 4, textAlign: 'center' }}>
             <Typography fontWeight={700}>Nothing here</Typography>
-            <Typography color="text.secondary">No reminders match these filters.</Typography>
+            <Typography color="text.secondary">{view === 'new' ? 'No new leads without a reminder.' : 'No reminders match these filters.'}</Typography>
           </Box>
         ) : (
           <Box sx={{ overflowX: { xs: 'visible', md: 'auto' } }}>
@@ -619,7 +668,7 @@ export function RemindersPage() {
             </Box>
 
             {pageRows.map((lead) => {
-              const bucket = followWhen(lead.next_followup_at) ?? 'u'
+              const bucket = lead.next_followup_at ? (followWhen(lead.next_followup_at) ?? 'u') : 'n'
               const tone = WHEN_CHIP[bucket]
               const priorityKey: LeadPriority = lead.priority in PRI_TONE ? lead.priority : 'medium'
               const pri = PRI_TONE[priorityKey]

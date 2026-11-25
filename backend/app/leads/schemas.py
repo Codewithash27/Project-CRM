@@ -87,7 +87,8 @@ class CreateLeadRequest(BaseModel):
     status: str | None = Field(default=None, max_length=40)
     priority: LeadPriority = "medium"
     plan_step: LeadPlanStep = Field(default="Day 1", min_length=1, max_length=40)
-    next_followup_at: datetime
+    # Optional: a new lead can be saved without a reminder (it then shows under Reminders → New leads).
+    next_followup_at: datetime | None = None
     extra_values: dict[str, Any] | None = None
 
     @field_validator("full_name")

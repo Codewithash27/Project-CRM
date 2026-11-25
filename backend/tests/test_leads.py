@@ -222,6 +222,27 @@ async def test_sales_rep_crud_is_limited_to_own_leads(client):
     assert (await client.get("/api/v1/leads")).json()["data"]["total"] == 0
 
 
+
+async def test_lead_can_be_created_without_a_reminder(client):
+    company_id = _add_company("North")
+    rep_id = _add_member("rep@example.com", "SALESPERSON", company_id=company_id)
+    project_id = _add_project(company_id, member_ids=[rep_id])
+    await _login(client, "rep@example.com")
+
+    payload = _lead_payload(project_id=str(project_id))
+    payload.pop("next_followup_at")
+    created = await client.post("/api/v1/leads", json=payload, headers=await csrf_headers(client))
+    assert created.status_code == 201, created.text
+    assert created.json()["data"]["next_followup_at"] is None
+
+    explicit_null = await client.post(
+        "/api/v1/leads",
+        json=_lead_payload(project_id=str(project_id), mobile="9876500000", email="b@example.com", next_followup_at=None),
+        headers=await csrf_headers(client),
+    )
+    assert explicit_null.status_code == 201, explicit_null.text
+    assert explicit_null.json()["data"]["next_followup_at"] is None
+
 async def test_salesperson_own_scope_and_owner_sees_company_leads(client):
     company_id = _add_company("North")
     field_id = _add_team(company_id, "Field")

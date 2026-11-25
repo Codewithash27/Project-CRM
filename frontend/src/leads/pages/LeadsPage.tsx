@@ -47,7 +47,7 @@ import { refreshReminderBadge } from '../../reminders/reminder-badge'
 import { ApiError } from '../../services/api/errors'
 import { api } from '../../services/api/client'
 import { useAuth } from '../../store/auth-context'
-import { defaultFollowupLocal, formatDueLabel, formatEnquiryDate, localInputToIso } from '../lead-dates'
+import { formatDueLabel, formatEnquiryDate, localInputToIso } from '../lead-dates'
 import {
   LEAD_PRIORITIES,
   LEAD_SOURCES,
@@ -131,7 +131,7 @@ function blankForm(projectId = ''): LeadForm {
     call_summary: '',
     status: 'new',
     priority: 'medium',
-    next_followup_at: defaultFollowupLocal(),
+    next_followup_at: '',
     extra_values: {},
   }
 }
@@ -793,7 +793,7 @@ export function LeadsPage() {
           fullWidth
           disabled={disabled}
           InputLabelProps={{ shrink: true }}
-          helperText="Optional — when will you call them next?"
+          helperText="Optional — leave blank if no reminder yet. Blank leads show under Reminders → New leads."
           onChange={(event) => setForm((current) => ({ ...current, next_followup_at: event.target.value }))}
         />
 
