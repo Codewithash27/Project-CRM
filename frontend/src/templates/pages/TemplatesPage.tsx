@@ -24,7 +24,6 @@ import { ErrorAlert } from '../../components/common/ErrorAlert'
 import { LoadingScreen } from '../../components/common/LoadingScreen'
 import { ApiError } from '../../services/api/errors'
 import { api } from '../../services/api/client'
-import { useAuth } from '../../store/auth-context'
 import { DEFAULT_TEMPLATE_COLOR, TEMPLATE_COLORS, TemplatePreview, useTemplateImage } from '../preview'
 
 interface TemplateItem {
@@ -111,7 +110,6 @@ function TemplateViewDialog({
 export function TemplatesPage() {
   const theme = useTheme()
   const phone = useMediaQuery(theme.breakpoints.down('sm'))
-  const { user } = useAuth()
   const [items, setItems] = useState<TemplateItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -381,13 +379,6 @@ export function TemplatesPage() {
                   helperText="Use {name} where the lead’s name should appear."
                   onChange={(event) => setMessage(event.target.value)}
                 />
-                {!user?.mobile ? (
-                  <Typography variant="body2" color="warning.main">
-                    {user?.roles.includes('BUSINESS_OWNER')
-                      ? 'Add your mobile number on the Team page. It is added at the end of every message.'
-                      : 'Your mobile number is missing. Ask the business owner to add it on the Team page.'}
-                  </Typography>
-                ) : null}
               </Stack>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>

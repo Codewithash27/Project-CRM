@@ -20,7 +20,6 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { ApiError } from '../../services/api/errors'
 import { api, apiBlob } from '../../services/api/client'
-import { useAuth } from '../../store/auth-context'
 import { renderWhatsAppMessage } from '../../templates/message'
 import { DEFAULT_TEMPLATE_COLOR, useTemplateImage } from '../../templates/preview'
 
@@ -117,7 +116,6 @@ export function SendTemplateDialog({
 }) {
   const theme = useTheme()
   const phone = useMediaQuery(theme.breakpoints.down('md'))
-  const { user, refreshUser } = useAuth()
   const [items, setItems] = useState<TemplateItem[]>([])
   const [loading, setLoading] = useState(false)
   const [templateId, setTemplateId] = useState('')
@@ -132,7 +130,6 @@ export function SendTemplateDialog({
     setError('')
     setNotice('')
     setLoading(true)
-    void refreshUser()
     void api
       .get<{ items: TemplateItem[] }>('/api/v1/message-templates')
       .then((result) => {
@@ -151,7 +148,7 @@ export function SendTemplateDialog({
     return () => {
       cancelled = true
     }
-  }, [open, refreshUser])
+  }, [open])
 
   const selected = useMemo(() => items.find((item) => item.id === templateId) ?? null, [items, templateId])
 
@@ -173,9 +170,7 @@ export function SendTemplateDialog({
     }
   }, [open, selected])
 
-  const preview = selected
-    ? renderWhatsAppMessage(selected.message, lead?.full_name ?? '', user?.full_name ?? '', user?.mobile ?? null)
-    : ''
+  const preview = selected ? renderWhatsAppMessage(selected.message, lead?.full_name ?? '') : ''
 
   async function copyImage() {
     if (!imageBlob || !selected) return
@@ -202,14 +197,6 @@ export function SendTemplateDialog({
 
   async function onSend() {
     if (!selected || !lead) return
-    if (!user?.mobile) {
-      setError(
-        user?.roles.includes('BUSINESS_OWNER')
-          ? 'Add your mobile number on the Team page before sending.'
-          : 'Your mobile number is missing. Ask the business owner to add it on the Team page.',
-      )
-      return
-    }
     setBusy(true)
     setError('')
     try {
@@ -290,7 +277,7 @@ export function SendTemplateDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button variant="contained" onClick={() => void onSend()} disabled={busy || !selected || !user?.mobile}>
+        <Button variant="contained" onClick={() => void onSend()} disabled={busy || !selected}>
           Send
         </Button>
       </DialogActions>

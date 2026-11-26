@@ -42,7 +42,7 @@
     "users": "Create the Business Owner first, then the other people in that business.",
     "roles": "See which role opens which menu, and create a custom role.",
     "team": "Super Admin assigns projects to business owners. Business owners assign salespeople and can move leads.",
-    "templates": "WhatsApp messages for the company. The lead name is filled in when you send, and your name and mobile number are added at the end.",
+    "templates": "WhatsApp messages for the company. The lead name is filled in when you send.",
     "reminders": "What is due today. Log Connected, No answer, Snooze, or Skip.",
     "leads": "Enquiries for the projects you can open. A salesperson creates them. An owner reviews them. Use Manage fields for extra columns.",
     "pipeline": "Kanban board by stage. Owners can add, recolor, reorder, or remove stages. New leads start in New.",

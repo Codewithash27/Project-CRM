@@ -347,7 +347,7 @@ export function TeamPage() {
         >
           <Typography fontWeight={600}>Your WhatsApp number</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            This name and number are added at the end of messages you send.
+            Your contact number on the team.
           </Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'flex-start' } }}>
             <TextField
@@ -660,7 +660,7 @@ export function TeamPage() {
                 fullWidth
                 disabled={saving}
                 placeholder="9876543210"
-                helperText="Added at the end of WhatsApp messages this person sends."
+                helperText="Contact number for this person."
                 autoComplete="off"
                 onChange={(event) => setMobile(event.target.value)}
               />
@@ -695,7 +695,7 @@ export function TeamPage() {
                 fullWidth
                 disabled={saving}
                 placeholder="9876543210"
-                helperText="Added at the end of WhatsApp messages this person sends."
+                helperText="Contact number for this person."
                 autoComplete="off"
                 onChange={(event) => setEditMobile(event.target.value)}
               />

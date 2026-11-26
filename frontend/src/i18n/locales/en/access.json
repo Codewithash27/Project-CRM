@@ -22,7 +22,7 @@
   "user": "User",
   "email": "Email",
   "mobileNumber": "Mobile number",
-  "mobileHint": "Added at the end of WhatsApp messages this person sends.",
+  "mobileHint": "Contact number for this person.",
   "role": "Role",
   "status": "Status",
   "actions": "Actions",
